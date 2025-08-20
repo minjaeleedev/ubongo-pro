@@ -157,7 +157,7 @@ namespace Ubongo
             Time.timeScale = 1f;
         }
 
-        private void ChangeState(GameState newState)
+        public void ChangeState(GameState newState)
         {
             currentState = newState;
             OnGameStateChanged?.Invoke(currentState);
