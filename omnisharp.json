@@ -1,0 +1,20 @@
+{
+    "RoslynExtensionsOptions": {
+        "EnableAnalyzersSupport": true,
+        "EnableDecompilationSupport": true
+    },
+    "FormattingOptions": {
+        "EnableEditorConfigSupport": true,
+        "OrganizeImports": true
+    },
+    "MsBuild": {
+        "UseLegacySdkResolver": false
+    },
+    "FileOptions": {
+        "SystemExcludeSearchPatterns": [
+            "**/Library/**",
+            "**/Temp/**",
+            "**/obj/**"
+        ]
+    }
+}
