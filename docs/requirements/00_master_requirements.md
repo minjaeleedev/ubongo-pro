@@ -55,51 +55,57 @@
 | 조각 구성 | 3-4블록 조각 8개 | 8블록 Cube 포함 | ✅ 수정됨 |
 | 주사위 시스템 | 10면체 주사위로 조각 결정 | 미구현 | 📝 문서화됨 |
 
-### 현재 구현 상태 대비 Critical Gaps
+### 구현 완료 상태 (2026-02-03 업데이트)
 
-1. **2층 높이 검증 로직 미구현** (Critical)
-   - 현재: 1층만 검증
-   - 필요: 정확히 2층 검증
+| Gap | 상태 | 구현 파일 |
+|-----|------|----------|
+| 2층 높이 검증 | ✅ 완료 | `PuzzleValidator.cs`, `GameBoard.cs` |
+| 보석 시스템 | ✅ 완료 | `GemSystem.cs` |
+| 난이도 시스템 | ✅ 완료 | `DifficultySystem.cs` |
+| 9라운드 시스템 | ✅ 완료 | `RoundManager.cs` |
+| 8개 정확한 조각 | ✅ 완료 | `PieceDefinition.cs` |
+| UI 개선 | ✅ 완료 | `UIManager.cs`, `GameHUD.cs`, `ResultPanel.cs` |
+| 블록 비주얼 | ✅ 완료 | `BlockVisualizer.cs`, `GameColors.cs` |
+| 보석 비주얼 | ✅ 완료 | `GemVisual.cs` |
+| 테스트베드 | ✅ 완료 | `DebugPanel.cs` |
 
-2. **보석 시스템 미구현** (Critical)
-   - 현재: 단순 점수만 존재
-   - 필요: 4종 보석, 획득 로직
+### 남은 작업 (Phase 3-4)
 
-3. **난이도 시스템 미구현** (Critical)
-   - 현재: 레벨만 존재
-   - 필요: 4단계 난이도 (초록/노랑/파랑/빨강)
+1. **주사위 시스템 UI** (Medium)
+   - 현재: 로직은 있으나 시각적 주사위 미구현
+   - 필요: 3D 주사위 애니메이션
 
-4. **9라운드 시스템 미구현** (High)
-   - 현재: 무한 레벨 진행
-   - 필요: 9라운드 게임 구조
+2. **사운드/이펙트** (Medium)
+   - 현재: 코드 구조만 존재
+   - 필요: 실제 오디오 에셋
 
-5. **주사위 시스템 미구현** (High)
-   - 현재: 랜덤 조각 선택
-   - 필요: 주사위 기반 조각 결정
+3. **멀티플레이어** (Low)
+   - 현재: 싱글플레이어만 완전 지원
+   - 필요: 네트워크 동기화
 
 ---
 
 ## 구현 우선순위 로드맵
 
-### Phase 1: Core Mechanics (2-3주)
-- [ ] 2층 높이 검증 로직 구현
-- [ ] 정확한 8개 조각 정의 및 구현
-- [ ] 조각 회전/뒤집기 시스템 완성
-- [ ] 기본 보석 시스템 구현
+### Phase 1: Core Mechanics ✅ 완료
+- [x] 2층 높이 검증 로직 구현 (`PuzzleValidator.cs`)
+- [x] 정확한 8개 조각 정의 및 구현 (`PieceDefinition.cs`)
+- [x] 조각 회전/뒤집기 시스템 완성 (`RotationUtil`)
+- [x] 기본 보석 시스템 구현 (`GemSystem.cs`)
 
-### Phase 2: Game Structure (2-3주)
-- [ ] 4단계 난이도 시스템
-- [ ] 9라운드 게임 구조
-- [ ] 주사위 시스템 UI/로직
-- [ ] 퍼즐 카드 데이터 구조
+### Phase 2: Game Structure ✅ 완료
+- [x] 4단계 난이도 시스템 (`DifficultySystem.cs`)
+- [x] 9라운드 게임 구조 (`RoundManager.cs`)
+- [x] 주사위 시스템 로직 (`UIManager.cs`)
+- [x] 퍼즐 카드 데이터 구조 (`TargetArea.cs`, `LevelGenerator.cs`)
 
-### Phase 3: Polish & Feedback (2주)
-- [ ] 시각적 피드백 개선
-- [ ] 사운드 효과 추가
-- [ ] 애니메이션 폴리시
+### Phase 3: Polish & Feedback (진행 중)
+- [x] 시각적 피드백 개선 (`BlockVisualizer.cs`, `GameHUD.cs`)
+- [ ] 사운드 효과 추가 (에셋 필요)
+- [x] 애니메이션 폴리시 (`GemVisual.cs`, `ResultPanel.cs`)
 - [ ] 튜토리얼 구현
 
-### Phase 4: Multiplayer & Extra (3-4주)
+### Phase 4: Multiplayer & Extra (미시작)
 - [ ] 로컬 멀티플레이어 (2-4인)
 - [ ] 온라인 멀티플레이어 기반
 - [ ] 리더보드
@@ -138,6 +144,41 @@
 |------|------|----------|
 | 1.0 | 2026-02-03 | 초기 문서 작성, 4개 역할별 요구사항 문서 생성 |
 | 1.0.1 | 2026-02-03 | 조각 정의 수정 (뒤집기 규칙, 8블록 Cube 제거) |
+| 2.0 | 2026-02-03 | Phase 1-2 구현 완료, 18개 C# 파일 생성 |
+
+---
+
+## 구현된 파일 목록
+
+### Core (6개)
+- `PieceDefinition.cs` - 8개 3D 폴리오미노 조각 + 24개 회전 행렬
+- `TargetArea.cs` - 유연한 퍼즐 타겟 영역
+- `PuzzleValidator.cs` - 2층 높이 검증 알고리즘
+- `GameColors.cs` - 색상 팔레트 정의
+- `BlockVisualizer.cs` - 블록 상태별 비주얼
+- `GemVisual.cs` - 보석 비주얼 및 애니메이션
+
+### Systems (3개)
+- `GemSystem.cs` - 보석 획득/점수 시스템
+- `RoundManager.cs` - 9라운드 진행 시스템
+- `DifficultySystem.cs` - 4단계 난이도 시스템
+
+### Managers (2개)
+- `GameManager.cs` - 게임 상태 관리 (수정됨)
+- `LevelGenerator.cs` - 퍼즐 생성 (수정됨)
+
+### GameBoard (2개)
+- `GameBoard.cs` - 게임 보드 (수정됨)
+- `BoardCell.cs` - 보드 셀
+
+### Pieces (1개)
+- `PuzzlePiece.cs` - 퍼즐 조각 (수정됨)
+
+### UI (4개)
+- `UIManager.cs` - UI 관리 (수정됨)
+- `GameHUD.cs` - 게임 HUD
+- `ResultPanel.cs` - 결과 화면
+- `DebugPanel.cs` - 테스트베드 UI
 
 ---
 
