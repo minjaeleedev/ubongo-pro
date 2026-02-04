@@ -16,9 +16,7 @@ namespace Ubongo
         [SerializeField] private AudioClip urgentWarningSound;
 
         [Header("Timer Warning Settings")]
-        [SerializeField] private float warningThreshold = 30f;
         [SerializeField] private float dangerThreshold = 10f;
-        [SerializeField] private float criticalThreshold = 5f;
         [SerializeField] private float timerEnlargeScale = 1.5f;
 
         [Header("Timer Colors")]
@@ -74,7 +72,7 @@ namespace Ubongo
         private void Start()
         {
             gameManager = GameManager.Instance;
-            uiManager = FindObjectOfType<UIManager>();
+            uiManager = FindAnyObjectByType<UIManager>();
 
             if (gameManager != null)
             {

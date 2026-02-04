@@ -1,11 +1,12 @@
 {
-    "name": "Ubongo.Runtime",
-    "rootNamespace": "Ubongo",
+    "name": "Ubongo.Editor",
+    "rootNamespace": "Ubongo.Editor",
     "references": [
-        "UnityEngine.UI",
-        "Unity.InputSystem"
+        "GUID:f895984e3ffd24808b74960551e22d44"
     ],
-    "includePlatforms": [],
+    "includePlatforms": [
+        "Editor"
+    ],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

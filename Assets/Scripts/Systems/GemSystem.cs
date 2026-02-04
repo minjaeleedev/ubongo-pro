@@ -341,7 +341,7 @@ namespace Ubongo.Systems
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<GemSystem>();
+                    _instance = FindAnyObjectByType<GemSystem>();
                     if (_instance == null)
                     {
                         var go = new GameObject("GemSystem");

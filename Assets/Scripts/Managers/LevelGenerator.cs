@@ -2,25 +2,15 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using Ubongo.Core;
+using Ubongo.Systems;
 
 namespace Ubongo
 {
     /// <summary>
-    /// Difficulty level for puzzle generation.
-    /// </summary>
-    public enum DifficultyLevel
-    {
-        Easy,
-        Medium,
-        Hard,
-        Expert
-    }
-
-    /// <summary>
-    /// Configuration settings for each difficulty level.
+    /// Configuration settings for each difficulty level (Level Generator specific).
     /// </summary>
     [System.Serializable]
-    public class DifficultyConfig
+    public class LevelDifficultyConfig
     {
         public DifficultyLevel Level;
         public int MinPieces;
@@ -30,11 +20,11 @@ namespace Ubongo
         public int MinSolutions;
         public int MaxSolutions;
 
-        public static DifficultyConfig GetConfig(DifficultyLevel level)
+        public static LevelDifficultyConfig GetConfig(DifficultyLevel level)
         {
             return level switch
             {
-                DifficultyLevel.Easy => new DifficultyConfig
+                DifficultyLevel.Easy => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Easy,
                     MinPieces = 3,
@@ -44,7 +34,7 @@ namespace Ubongo
                     MinSolutions = 6,
                     MaxSolutions = 20
                 },
-                DifficultyLevel.Medium => new DifficultyConfig
+                DifficultyLevel.Medium => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Medium,
                     MinPieces = 4,
@@ -54,7 +44,7 @@ namespace Ubongo
                     MinSolutions = 4,
                     MaxSolutions = 10
                 },
-                DifficultyLevel.Hard => new DifficultyConfig
+                DifficultyLevel.Hard => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Hard,
                     MinPieces = 4,
@@ -64,7 +54,7 @@ namespace Ubongo
                     MinSolutions = 3,
                     MaxSolutions = 6
                 },
-                DifficultyLevel.Expert => new DifficultyConfig
+                DifficultyLevel.Expert => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Expert,
                     MinPieces = 5,
@@ -139,7 +129,7 @@ namespace Ubongo
         /// </summary>
         public LevelData GenerateSolvablePuzzle(DifficultyLevel difficulty, int levelNumber = 1)
         {
-            DifficultyConfig config = DifficultyConfig.GetConfig(difficulty);
+            LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
             List<PieceDefinition> selectedPieces = null;
             TargetArea targetArea = null;
             int totalBlocks = 0;
@@ -179,7 +169,7 @@ namespace Ubongo
         /// <summary>
         /// Selects pieces based on difficulty configuration.
         /// </summary>
-        private List<PieceDefinition> SelectPiecesForDifficulty(DifficultyConfig config)
+        private List<PieceDefinition> SelectPiecesForDifficulty(LevelDifficultyConfig config)
         {
             var selected = new List<PieceDefinition>();
             var availablePieces = new List<PieceDefinition>(allPieces);

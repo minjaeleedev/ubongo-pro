@@ -68,7 +68,6 @@ namespace Ubongo
 
         [Header("Block Configuration")]
         [SerializeField] private GameColors.BlockColorId blockColorId = GameColors.BlockColorId.SunsetOrange;
-        [SerializeField] private bool useBeveledMesh = true;
 
         [Header("Material Settings")]
         [SerializeField] private float smoothness = 0.7f;

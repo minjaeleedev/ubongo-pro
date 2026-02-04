@@ -108,7 +108,7 @@ namespace Ubongo
         private void Start()
         {
             gameManager = GameManager.Instance;
-            uiManager = FindObjectOfType<UIManager>();
+            uiManager = FindAnyObjectByType<UIManager>();
 
             InitializeButtons();
             HideAllContainers();

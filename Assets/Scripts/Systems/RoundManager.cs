@@ -75,7 +75,7 @@ namespace Ubongo.Systems
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<RoundManager>();
+                    _instance = FindAnyObjectByType<RoundManager>();
                     if (_instance == null)
                     {
                         var go = new GameObject("RoundManager");

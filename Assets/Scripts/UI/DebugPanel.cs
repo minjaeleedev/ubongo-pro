@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using System.Text;
 
 namespace Ubongo
@@ -74,108 +75,64 @@ namespace Ubongo
 
         private void Start()
         {
-            gameBoard = FindObjectOfType<GameBoard>();
-            levelGenerator = FindObjectOfType<LevelGenerator>();
+            gameBoard = FindAnyObjectByType<GameBoard>();
+            levelGenerator = FindAnyObjectByType<LevelGenerator>();
 
             fpsTimeLeft = fpsUpdateInterval;
 
             HideAllPanels();
             SetupDropdowns();
+            SubscribeToInputEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromInputEvents();
+        }
+
+        private void SubscribeToInputEvents()
+        {
+            if (InputManager.Instance == null) return;
+
+            InputManager.Instance.OnToggleHelp += ShowHelpOverlay;
+            InputManager.Instance.OnToggleDebugPanel += ToggleDebugPanel;
+            InputManager.Instance.OnToggleGenerator += TogglePuzzleGenerator;
+            InputManager.Instance.OnToggleRotation += ToggleRotationTester;
+            InputManager.Instance.OnQuickGenerate += QuickGeneratePuzzle;
+            InputManager.Instance.OnAutoSolve += AutoSolveCurrentPuzzle;
+            InputManager.Instance.OnStepSolution += StepThroughSolution;
+            InputManager.Instance.OnExport += ExportCurrentState;
+            InputManager.Instance.OnToggleGrid += ToggleGridOverlay;
+            InputManager.Instance.OnToggleWireframe += ToggleWireframeMode;
+            InputManager.Instance.OnToggleStats += ToggleDebugPanel;
+            InputManager.Instance.OnResetPuzzle += ResetPuzzle;
+        }
+
+        private void UnsubscribeFromInputEvents()
+        {
+            if (InputManager.Instance == null) return;
+
+            InputManager.Instance.OnToggleHelp -= ShowHelpOverlay;
+            InputManager.Instance.OnToggleDebugPanel -= ToggleDebugPanel;
+            InputManager.Instance.OnToggleGenerator -= TogglePuzzleGenerator;
+            InputManager.Instance.OnToggleRotation -= ToggleRotationTester;
+            InputManager.Instance.OnQuickGenerate -= QuickGeneratePuzzle;
+            InputManager.Instance.OnAutoSolve -= AutoSolveCurrentPuzzle;
+            InputManager.Instance.OnStepSolution -= StepThroughSolution;
+            InputManager.Instance.OnExport -= ExportCurrentState;
+            InputManager.Instance.OnToggleGrid -= ToggleGridOverlay;
+            InputManager.Instance.OnToggleWireframe -= ToggleWireframeMode;
+            InputManager.Instance.OnToggleStats -= ToggleDebugPanel;
+            InputManager.Instance.OnResetPuzzle -= ResetPuzzle;
         }
 
         private void Update()
         {
-            HandleKeyboardShortcuts();
             UpdateFpsCounter();
 
             if (isDebugPanelVisible)
             {
                 UpdateDebugInfo();
-            }
-        }
-
-        #endregion
-
-        #region Keyboard Shortcuts
-
-        private void HandleKeyboardShortcuts()
-        {
-            // F1: Show/Hide Help Overlay
-            if (Input.GetKeyDown(KeyCode.F1))
-            {
-                ShowHelpOverlay();
-            }
-
-            // F2: Toggle Debug Panel
-            if (Input.GetKeyDown(KeyCode.F2))
-            {
-                ToggleDebugPanel();
-            }
-
-            // F3: Toggle Puzzle Generator
-            if (Input.GetKeyDown(KeyCode.F3))
-            {
-                TogglePuzzleGenerator();
-            }
-
-            // F4: Toggle Rotation Tester
-            if (Input.GetKeyDown(KeyCode.F4))
-            {
-                ToggleRotationTester();
-            }
-
-            // F5: Quick Generate Puzzle
-            if (Input.GetKeyDown(KeyCode.F5))
-            {
-                QuickGeneratePuzzle();
-            }
-
-            // F6: Auto-Solve Current Puzzle
-            if (Input.GetKeyDown(KeyCode.F6))
-            {
-                AutoSolveCurrentPuzzle();
-            }
-
-            // F7: Step Through Solution
-            if (Input.GetKeyDown(KeyCode.F7))
-            {
-                StepThroughSolution();
-            }
-
-            // F8: Export Current State
-            if (Input.GetKeyDown(KeyCode.F8))
-            {
-                ExportCurrentState();
-            }
-
-            // F10: Toggle Grid Overlay
-            if (Input.GetKeyDown(KeyCode.F10))
-            {
-                ToggleGridOverlay();
-            }
-
-            // F11: Toggle Wireframe Mode
-            if (Input.GetKeyDown(KeyCode.F11))
-            {
-                ToggleWireframeMode();
-            }
-
-            // F12: Toggle Performance Stats
-            if (Input.GetKeyDown(KeyCode.F12))
-            {
-                ToggleDebugPanel();
-            }
-
-            // Ctrl+N: New Random Puzzle
-            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.N))
-            {
-                QuickGeneratePuzzle();
-            }
-
-            // Ctrl+R: Reset Puzzle
-            if (Input.GetKey(KeyCode.LeftControl) && Input.GetKeyDown(KeyCode.R))
-            {
-                ResetPuzzle();
             }
         }
 
@@ -397,7 +354,7 @@ namespace Ubongo
 
             if (levelGenerator != null)
             {
-                levelGenerator.GenerateLevel();
+                levelGenerator.GenerateLevel(1);
             }
         }
 
@@ -437,7 +394,7 @@ namespace Ubongo
             AddLog("> Quick generating puzzle (Medium difficulty)...");
             if (levelGenerator != null)
             {
-                levelGenerator.GenerateLevel();
+                levelGenerator.GenerateLevel(1);
             }
             AddLog("> Puzzle generated successfully");
         }
@@ -625,7 +582,7 @@ namespace Ubongo
 
         private int GetAvailableBlockCount()
         {
-            PuzzlePiece[] pieces = FindObjectsOfType<PuzzlePiece>();
+            PuzzlePiece[] pieces = FindObjectsByType<PuzzlePiece>(FindObjectsSortMode.None);
             int count = 0;
             foreach (var piece in pieces)
             {
@@ -636,7 +593,7 @@ namespace Ubongo
 
         private int GetPlacedBlockCount()
         {
-            PuzzlePiece[] pieces = FindObjectsOfType<PuzzlePiece>();
+            PuzzlePiece[] pieces = FindObjectsByType<PuzzlePiece>(FindObjectsSortMode.None);
             int count = 0;
             foreach (var piece in pieces)
             {
@@ -647,14 +604,20 @@ namespace Ubongo
 
         private int GetTotalBlockCount()
         {
-            return FindObjectsOfType<PuzzlePiece>().Length;
+            return FindObjectsByType<PuzzlePiece>(FindObjectsSortMode.None).Length;
         }
 
         private Vector3 GetMouseWorldPosition()
         {
+            if (InputManager.Instance != null)
+            {
+                return InputManager.Instance.GetWorldPosition(0f);
+            }
+
             if (Camera.main == null) return Vector3.zero;
 
-            Ray ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+            Vector2 mousePosition = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
+            Ray ray = Camera.main.ScreenPointToRay(mousePosition);
             Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
 
             if (groundPlane.Raycast(ray, out float distance))
@@ -683,7 +646,7 @@ namespace Ubongo
         {
             if (debugPanelRoot != null) return;
 
-            Canvas canvas = FindObjectOfType<Canvas>();
+            Canvas canvas = FindAnyObjectByType<Canvas>();
             if (canvas == null)
             {
                 GameObject canvasObj = new GameObject("DebugCanvas");

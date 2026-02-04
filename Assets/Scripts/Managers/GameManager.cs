@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using Ubongo.Systems;
+using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
 
 namespace Ubongo
 {
@@ -47,7 +48,7 @@ namespace Ubongo
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<GameManager>();
+                    _instance = FindAnyObjectByType<GameManager>();
                     if (_instance == null)
                     {
                         var go = new GameObject("GameManager");
@@ -80,6 +81,11 @@ namespace Ubongo
         public event Action OnSecondChanceStarted;
         public event Action<TiebreakerResult> OnTiebreakerEnded;
 
+        // Legacy UI compatibility events
+        public event Action<int> OnScoreChanged;
+        public event Action<float> OnTimeChanged;
+        public event Action OnLevelComplete;
+
         // Properties
         public GameState CurrentState => _currentState;
         public GameMode CurrentMode => currentMode;
@@ -87,18 +93,22 @@ namespace Ubongo
         public int BonusScore => _bonusScore;
         public int ConsecutiveClears => _consecutiveClears;
 
-        // System References
-        public GemSystem GemSystem => gemSystem != null ? gemSystem : GemSystem.Instance;
-        public RoundManager RoundManager => roundManager != null ? roundManager : RoundManager.Instance;
-        public DifficultySystem DifficultySystem => difficultySystem != null ? difficultySystem : DifficultySystem.Instance;
-        public TiebreakerManager TiebreakerManager => tiebreakerManager != null ? tiebreakerManager : TiebreakerManager.Instance;
+        // Legacy UI compatibility properties
+        public int Score => TotalGemPoints + _bonusScore;
+        public int CurrentLevel => CurrentRound;
+
+        // System References (단일 인스턴스 참조만 사용)
+        public GemSystem GemSystem => gemSystem;
+        public RoundManager RoundManager => roundManager;
+        public DifficultySystem DifficultySystem => difficultySystem;
+        public TiebreakerManager TiebreakerManager => tiebreakerManager;
 
         // Computed Properties
         public int CurrentRound => RoundManager?.CurrentRound ?? 0;
         public int TotalRounds => RoundManager?.TotalRounds ?? 9;
         public float RemainingTime => RoundManager?.RemainingTime ?? 0f;
         public int TotalGemPoints => GemSystem?.TotalPoints ?? 0;
-        public DifficultyLevel CurrentDifficulty => DifficultySystem?.CurrentDifficulty ?? DifficultyLevel.Easy;
+        public DifficultyLevelSystem CurrentDifficulty => DifficultySystem?.CurrentDifficulty ?? DifficultyLevelSystem.Easy;
 
         private void Awake()
         {
@@ -121,22 +131,12 @@ namespace Ubongo
 
         private void InitializeSystemReferences()
         {
-            if (gemSystem == null)
-            {
-                gemSystem = FindObjectOfType<GemSystem>();
-            }
-            if (roundManager == null)
-            {
-                roundManager = FindObjectOfType<RoundManager>();
-            }
-            if (difficultySystem == null)
-            {
-                difficultySystem = FindObjectOfType<DifficultySystem>();
-            }
-            if (tiebreakerManager == null)
-            {
-                tiebreakerManager = FindObjectOfType<TiebreakerManager>();
-            }
+            // 항상 싱글톤 Instance를 사용하여 일관성 보장
+            // Inspector 할당값보다 Instance를 우선하여 이벤트 구독 불일치 방지
+            gemSystem = GemSystem.Instance;
+            roundManager = RoundManager.Instance;
+            difficultySystem = DifficultySystem.Instance;
+            tiebreakerManager = TiebreakerManager.Instance;
         }
 
         private void SubscribeToEvents()
@@ -149,6 +149,7 @@ namespace Ubongo
                 RoundManager.OnRoundFailed += HandleRoundFailed;
                 RoundManager.OnGameCompleted += HandleGameCompleted;
                 RoundManager.OnSecondChanceStarted += HandleSecondChanceStarted;
+                RoundManager.OnRoundTimeUpdated += HandleTimeUpdated;
             }
 
             if (TiebreakerManager != null)
@@ -168,6 +169,7 @@ namespace Ubongo
                 RoundManager.OnRoundFailed -= HandleRoundFailed;
                 RoundManager.OnGameCompleted -= HandleGameCompleted;
                 RoundManager.OnSecondChanceStarted -= HandleSecondChanceStarted;
+                RoundManager.OnRoundTimeUpdated -= HandleTimeUpdated;
             }
 
             if (TiebreakerManager != null)
@@ -197,8 +199,11 @@ namespace Ubongo
         /// <summary>
         /// 게임 시작 (난이도 선택 후)
         /// </summary>
-        public void StartGame(DifficultyLevel difficulty)
+        public void StartGame(DifficultyLevelSystem difficulty)
         {
+            // 이벤트 구독이 올바른 인스턴스에 되어있는지 확인
+            EnsureEventSubscriptions();
+
             ResetGameState();
 
             DifficultySystem?.SetDifficulty(difficulty);
@@ -219,6 +224,29 @@ namespace Ubongo
                     StartMultiplayerMode();
                     break;
             }
+        }
+
+        /// <summary>
+        /// 게임 시작 (기본 난이도 Easy)
+        /// </summary>
+        public void StartGame()
+        {
+            StartGame(DifficultyLevelSystem.Easy);
+        }
+
+        private void EnsureEventSubscriptions()
+        {
+            // 기존 구독 해제
+            UnsubscribeFromEvents();
+
+            // 참조 갱신 (싱글톤 인스턴스가 늦게 생성된 경우 대비)
+            if (roundManager == null) roundManager = RoundManager.Instance;
+            if (gemSystem == null) gemSystem = GemSystem.Instance;
+            if (difficultySystem == null) difficultySystem = DifficultySystem.Instance;
+            if (tiebreakerManager == null) tiebreakerManager = TiebreakerManager.Instance;
+
+            // 재구독
+            SubscribeToEvents();
         }
 
         private void ResetGameState()
@@ -250,6 +278,30 @@ namespace Ubongo
         }
 
         /// <summary>
+        /// 현재 레벨 재시작 (RestartRound의 별칭)
+        /// </summary>
+        public void RestartLevel()
+        {
+            RestartRound();
+        }
+
+        /// <summary>
+        /// 다음 레벨로 진행
+        /// </summary>
+        public void NextLevel()
+        {
+            RoundManager?.StartNextRound();
+        }
+
+        /// <summary>
+        /// 레벨 완료 처리 (CompletePuzzle의 별칭)
+        /// </summary>
+        public void CompleteLevel()
+        {
+            CompletePuzzle();
+        }
+
+        /// <summary>
         /// 퍼즐 해결 완료 처리
         /// </summary>
         public void CompletePuzzle()
@@ -273,6 +325,7 @@ namespace Ubongo
 
             _bonusScore += timeBonus + streakBonus;
             OnBonusScoreChanged?.Invoke(_bonusScore);
+            OnScoreChanged?.Invoke(Score);
         }
 
         /// <summary>
@@ -382,6 +435,12 @@ namespace Ubongo
         {
             DifficultySystem?.RecordRoundSuccess();
             ChangeState(GameState.RoundComplete);
+            OnLevelComplete?.Invoke();
+        }
+
+        private void HandleTimeUpdated(float remainingTime)
+        {
+            OnTimeChanged?.Invoke(remainingTime);
         }
 
         private void HandleRoundFailed(RoundResult result)
@@ -474,7 +533,7 @@ namespace Ubongo
     public readonly struct GameResultData
     {
         public GameMode GameMode { get; }
-        public DifficultyLevel Difficulty { get; }
+        public DifficultyLevelSystem Difficulty { get; }
         public GameResultSummary RoundSummary { get; }
         public GemCollectionSummary GemSummary { get; }
         public int BonusScore { get; }
@@ -484,7 +543,7 @@ namespace Ubongo
 
         public GameResultData(
             GameMode gameMode,
-            DifficultyLevel difficulty,
+            DifficultyLevelSystem difficulty,
             GameResultSummary roundSummary,
             GemCollectionSummary gemSummary,
             int bonusScore,

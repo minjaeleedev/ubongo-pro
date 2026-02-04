@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -24,7 +25,6 @@ namespace Ubongo
 
         [Header("Drag Settings")]
         [SerializeField] private float dragHeight = 2f;
-        [SerializeField] private float rotationSpeed = 90f;
         [SerializeField] private LayerMask boardLayer;
 
         [Header("Visual Feedback Colors")]
@@ -76,12 +76,12 @@ namespace Ubongo
         private Coroutine pulseCoroutine;
         private Coroutine shakeCoroutine;
         private Vector3 lastValidPosition;
-        private bool isOverValidPosition = false;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
         public bool IsSelected => isSelected;
         public PlacementState CurrentState => currentState;
+        public float DragHeight => dragHeight;
 
         public event Action<PuzzlePiece> OnPieceSelected;
         public event Action<PuzzlePiece> OnPieceDeselected;
@@ -96,13 +96,147 @@ namespace Ubongo
 
             CreateBlockVisuals();
             SetState(PlacementState.Default);
+            SubscribeToInputEvents();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromInputEvents();
+        }
+
+        private void SubscribeToInputEvents()
+        {
+            if (InputManager.Instance == null) return;
+
+            InputManager.Instance.OnPieceHoverEnter += HandleHoverEnter;
+            InputManager.Instance.OnPieceHoverExit += HandleHoverExit;
+            InputManager.Instance.OnPieceSelectStart += HandleSelectStart;
+            InputManager.Instance.OnPieceDrag += HandleDrag;
+            InputManager.Instance.OnPieceSelectEnd += HandleSelectEnd;
+            InputManager.Instance.OnPieceRotate += HandleRotate;
+        }
+
+        private void UnsubscribeFromInputEvents()
+        {
+            if (InputManager.Instance == null) return;
+
+            InputManager.Instance.OnPieceHoverEnter -= HandleHoverEnter;
+            InputManager.Instance.OnPieceHoverExit -= HandleHoverExit;
+            InputManager.Instance.OnPieceSelectStart -= HandleSelectStart;
+            InputManager.Instance.OnPieceDrag -= HandleDrag;
+            InputManager.Instance.OnPieceSelectEnd -= HandleSelectEnd;
+            InputManager.Instance.OnPieceRotate -= HandleRotate;
+        }
+
+        private void HandleHoverEnter(PuzzlePiece piece)
+        {
+            if (piece != this) return;
+            if (isDragging || isPlaced) return;
+
+            isHovering = true;
+            SetState(PlacementState.Hovering);
+            StartCoroutine(HoverLift());
+        }
+
+        private void HandleHoverExit(PuzzlePiece piece)
+        {
+            if (piece != this) return;
+            if (isDragging || isSelected) return;
+
+            isHovering = false;
+            SetState(PlacementState.Default);
+        }
+
+        private void HandleSelectStart(PuzzlePiece piece)
+        {
+            if (piece != this) return;
+
+            if (isPlaced)
+            {
+                gameBoard.RemovePiece(this);
+                PlaySound(releaseSound);
+            }
+
+            isDragging = true;
+            isSelected = true;
+            SetState(PlacementState.Dragging);
+
+            PlaySound(pickupSound);
+            OnPieceSelected?.Invoke(this);
+
+            if (InputManager.Instance != null)
+            {
+                Ray ray = InputManager.Instance.GetPointerRay();
+                if (Physics.Raycast(ray, out RaycastHit hit))
+                {
+                    dragOffset = transform.position - hit.point;
+                    dragOffset.y = 0;
+                }
+            }
+        }
+
+        private void HandleDrag(PuzzlePiece piece, Vector3 newPosition)
+        {
+            if (piece != this) return;
+            if (!isDragging) return;
+
+            transform.position = newPosition;
+        }
+
+        private void HandleSelectEnd(PuzzlePiece piece)
+        {
+            if (piece != this) return;
+
+            isDragging = false;
+            ClearHeightIndicators();
+
+            if (InputManager.Instance != null && InputManager.Instance.TryGetBoardHit(out RaycastHit hit))
+            {
+                GameBoard board = hit.collider.GetComponentInParent<GameBoard>();
+                if (board != null)
+                {
+                    Vector3Int gridPos = board.WorldToGrid(transform.position);
+
+                    if (board.CanPlacePiece(this, gridPos))
+                    {
+                        StartCoroutine(SnapToPosition(board.GridToWorld(gridPos.x, gridPos.y, gridPos.z)));
+                        board.PlacePiece(this, gridPos);
+                        PlaySound(validPlaceSound);
+                        OnPlacementAttempt?.Invoke(this, true);
+                    }
+                    else
+                    {
+                        StartCoroutine(ShakeAndReturn());
+                        PlaySound(invalidPlaceSound);
+                        OnPlacementAttempt?.Invoke(this, false);
+                    }
+                }
+                else
+                {
+                    ReturnToOriginalPosition();
+                }
+            }
+            else
+            {
+                ReturnToOriginalPosition();
+            }
+
+            gameBoard.ClearHighlights();
+        }
+
+        private void HandleRotate(Vector3 axis, float angle)
+        {
+            if (!isDragging) return;
+            if (InputManager.Instance == null) return;
+            if (InputManager.Instance.SelectedPiece != this) return;
+
+            RotateWithAnimation(axis, angle);
         }
 
         private void Update()
         {
             if (isDragging)
             {
-                HandleRotationInput();
                 UpdatePlacementPreview();
             }
         }
@@ -454,25 +588,6 @@ namespace Ubongo
             heightIndicators.Add(indicator);
         }
 
-        private void OnMouseEnter()
-        {
-            if (!isDragging && !isPlaced)
-            {
-                isHovering = true;
-                SetState(PlacementState.Hovering);
-                StartCoroutine(HoverLift());
-            }
-        }
-
-        private void OnMouseExit()
-        {
-            if (!isDragging && !isSelected)
-            {
-                isHovering = false;
-                SetState(PlacementState.Default);
-            }
-        }
-
         private IEnumerator HoverLift()
         {
             Vector3 startPos = transform.position;
@@ -485,63 +600,6 @@ namespace Ubongo
                 elapsed += Time.deltaTime;
                 transform.position = Vector3.Lerp(startPos, targetPos, elapsed / duration);
                 yield return null;
-            }
-        }
-
-        private void OnMouseDown()
-        {
-            if (isPlaced)
-            {
-                gameBoard.RemovePiece(this);
-                PlaySound(releaseSound);
-            }
-
-            isDragging = true;
-            isSelected = true;
-            SetState(PlacementState.Dragging);
-
-            PlaySound(pickupSound);
-            OnPieceSelected?.Invoke(this);
-
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit))
-            {
-                dragOffset = transform.position - hit.point;
-                dragOffset.y = 0;
-            }
-        }
-
-        private void OnMouseDrag()
-        {
-            if (!isDragging) return;
-
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            Plane dragPlane = new Plane(Vector3.up, Vector3.up * dragHeight);
-
-            if (dragPlane.Raycast(ray, out float distance))
-            {
-                Vector3 point = ray.GetPoint(distance);
-                transform.position = point + dragOffset;
-            }
-        }
-
-        private void HandleRotationInput()
-        {
-            if (Input.GetKeyDown(KeyCode.Q))
-            {
-                RotateWithAnimation(Vector3.up, -90f);
-            }
-            else if (Input.GetKeyDown(KeyCode.E))
-            {
-                RotateWithAnimation(Vector3.up, 90f);
-            }
-            else if (Input.GetKeyDown(KeyCode.R))
-            {
-                RotateWithAnimation(Vector3.right, 90f);
-            }
-            else if (Input.GetKeyDown(KeyCode.F))
-            {
-                RotateWithAnimation(Vector3.forward, 90f);
             }
         }
 
@@ -598,46 +656,6 @@ namespace Ubongo
             }
 
             gameBoard.HighlightValidPlacement(gridPos, this);
-        }
-
-        private void OnMouseUp()
-        {
-            isDragging = false;
-            ClearHeightIndicators();
-
-            Ray ray = mainCamera.ScreenPointToRay(Input.mousePosition);
-            if (Physics.Raycast(ray, out RaycastHit hit, 100f, boardLayer))
-            {
-                GameBoard board = hit.collider.GetComponentInParent<GameBoard>();
-                if (board != null)
-                {
-                    Vector3Int gridPos = board.WorldToGrid(transform.position);
-
-                    if (board.CanPlacePiece(this, gridPos))
-                    {
-                        StartCoroutine(SnapToPosition(board.GridToWorld(gridPos.x, gridPos.y, gridPos.z)));
-                        board.PlacePiece(this, gridPos);
-                        PlaySound(validPlaceSound);
-                        OnPlacementAttempt?.Invoke(this, true);
-                    }
-                    else
-                    {
-                        StartCoroutine(ShakeAndReturn());
-                        PlaySound(invalidPlaceSound);
-                        OnPlacementAttempt?.Invoke(this, false);
-                    }
-                }
-                else
-                {
-                    ReturnToOriginalPosition();
-                }
-            }
-            else
-            {
-                ReturnToOriginalPosition();
-            }
-
-            gameBoard.ClearHighlights();
         }
 
         private IEnumerator SnapToPosition(Vector3 targetPosition)

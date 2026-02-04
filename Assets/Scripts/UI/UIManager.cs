@@ -181,7 +181,7 @@ namespace Ubongo
                     DisplayGameOverResults();
                     break;
 
-                case GameState.LevelComplete:
+                case GameState.RoundComplete:
                     ShowPanel(levelCompletePanel);
                     DisplayLevelCompleteResults();
                     break;
@@ -543,7 +543,7 @@ namespace Ubongo
         private void OnReturnToMenu()
         {
             Time.timeScale = 1f;
-            gameManager.ChangeState(GameState.Menu);
+            gameManager.ReturnToMenu();
         }
 
         private void OnNextLevel()

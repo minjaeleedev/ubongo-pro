@@ -74,7 +74,7 @@ namespace Ubongo.Systems
             {
                 if (_instance == null)
                 {
-                    _instance = FindObjectOfType<TiebreakerManager>();
+                    _instance = FindAnyObjectByType<TiebreakerManager>();
                     if (_instance == null)
                     {
                         var go = new GameObject("TiebreakerManager");
