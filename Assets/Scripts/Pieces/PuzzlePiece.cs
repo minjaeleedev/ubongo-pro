@@ -76,6 +76,7 @@ namespace Ubongo
         private Coroutine pulseCoroutine;
         private Coroutine shakeCoroutine;
         private Vector3 lastValidPosition;
+        private bool isOverValidPosition = false;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -90,7 +91,7 @@ namespace Ubongo
         private void Start()
         {
             mainCamera = Camera.main;
-            gameBoard = FindObjectOfType<GameBoard>();
+            gameBoard = FindFirstObjectByType<GameBoard>();
             originalPosition = transform.position;
             originalRotation = transform.rotation;
 
