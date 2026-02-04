@@ -54,6 +54,9 @@
 | 조각 뒤집기 | 허용됨 | "불가"로 잘못 기술 | ✅ 수정됨 |
 | 조각 구성 | 3-4블록 조각 8개 | 8블록 Cube 포함 | ✅ 수정됨 |
 | 주사위 시스템 | 10면체 주사위로 조각 결정 | 미구현 | 📝 문서화됨 |
+| Second Chance Round | 전원 실패 시 재도전 라운드 | ❌ 누락됨 | ✅ 문서화됨 (2026-02-03) |
+| Tiebreaker Rules | 동점 시 타이머 없는 결승전 | ⚠️ 불완전 | ✅ 확장됨 (2026-02-03) |
+| Finite Gem Pool | 58개 보석 유한 풀 시스템 | ❌ 미명시 | ✅ 명세 추가 (2026-02-03) |
 
 ### 구현 완료 상태 (2026-02-03 업데이트)
 
@@ -71,15 +74,31 @@
 
 ### 남은 작업 (Phase 3-4)
 
-1. **주사위 시스템 UI** (Medium)
+1. **Second Chance Round 구현** (HIGH) 🆕
+   - 현재: 규칙 문서화됨, 미구현
+   - 필요: `RoundManager.cs`에 SecondChance 상태 추가
+   - 참조: `01_game_rules_and_requirements.md` Section 7.5
+
+2. **Tiebreaker Round 구현** (HIGH) 🆕
+   - 현재: 규칙 확장 문서화됨, 미구현
+   - 필요: `GameManager.cs`에 Tiebreaker 상태 추가
+   - 참조: `01_game_rules_and_requirements.md` Section 8.2.1
+
+3. **Finite Gem Pool 구현** (MEDIUM) 🆕
+   - 현재: 명세 추가됨, 미구현
+   - 필요: `GemPoolManager.cs` 신규 생성
+   - 참조: `03_core_logic_requirements.md` Section 6.4
+   - 우선순위: 무한 모드 기본, 유한 모드 옵션
+
+4. **주사위 시스템 UI** (Medium)
    - 현재: 로직은 있으나 시각적 주사위 미구현
    - 필요: 3D 주사위 애니메이션
 
-2. **사운드/이펙트** (Medium)
+5. **사운드/이펙트** (Medium)
    - 현재: 코드 구조만 존재
    - 필요: 실제 오디오 에셋
 
-3. **멀티플레이어** (Low)
+6. **멀티플레이어** (Low)
    - 현재: 싱글플레이어만 완전 지원
    - 필요: 네트워크 동기화
 
@@ -104,6 +123,9 @@
 - [ ] 사운드 효과 추가 (에셋 필요)
 - [x] 애니메이션 폴리시 (`GemVisual.cs`, `ResultPanel.cs`)
 - [ ] 튜토리얼 구현
+- [ ] Second Chance Round 구현 🆕 (HIGH)
+- [ ] Tiebreaker Round 구현 🆕 (HIGH)
+- [ ] Finite Gem Pool 구현 🆕 (MEDIUM - 옵션)
 
 ### Phase 4: Multiplayer & Extra (미시작)
 - [ ] 로컬 멀티플레이어 (2-4인)
@@ -145,6 +167,7 @@
 | 1.0 | 2026-02-03 | 초기 문서 작성, 4개 역할별 요구사항 문서 생성 |
 | 1.0.1 | 2026-02-03 | 조각 정의 수정 (뒤집기 규칙, 8블록 Cube 제거) |
 | 2.0 | 2026-02-03 | Phase 1-2 구현 완료, 18개 C# 파일 생성 |
+| 2.1 | 2026-02-03 | Gap 분석 결과 반영: Second Chance Round, Tiebreaker Rules, GemPool 명세 추가 |
 
 ---
 

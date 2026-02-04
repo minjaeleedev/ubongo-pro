@@ -17,7 +17,10 @@ namespace Ubongo
         Paused,
         RoundComplete,
         RoundFailed,
+        SecondChance,           // 재도전 라운드
         GameComplete,
+        Tiebreaker,             // 타이브레이커 진행 중
+        TiebreakerComplete,     // 타이브레이커 완료
         GameOver
     }
 
@@ -63,6 +66,7 @@ namespace Ubongo
         [SerializeField] private GemSystem gemSystem;
         [SerializeField] private RoundManager roundManager;
         [SerializeField] private DifficultySystem difficultySystem;
+        [SerializeField] private TiebreakerManager tiebreakerManager;
 
         private GameState _currentState = GameState.Menu;
         private int _bonusScore = 0;
@@ -73,6 +77,8 @@ namespace Ubongo
         public event Action<int> OnBonusScoreChanged;
         public event Action<GameMode> OnGameModeChanged;
         public event Action OnPuzzleSolved;
+        public event Action OnSecondChanceStarted;
+        public event Action<TiebreakerResult> OnTiebreakerEnded;
 
         // Properties
         public GameState CurrentState => _currentState;
@@ -85,6 +91,7 @@ namespace Ubongo
         public GemSystem GemSystem => gemSystem != null ? gemSystem : GemSystem.Instance;
         public RoundManager RoundManager => roundManager != null ? roundManager : RoundManager.Instance;
         public DifficultySystem DifficultySystem => difficultySystem != null ? difficultySystem : DifficultySystem.Instance;
+        public TiebreakerManager TiebreakerManager => tiebreakerManager != null ? tiebreakerManager : TiebreakerManager.Instance;
 
         // Computed Properties
         public int CurrentRound => RoundManager?.CurrentRound ?? 0;
@@ -126,6 +133,10 @@ namespace Ubongo
             {
                 difficultySystem = FindObjectOfType<DifficultySystem>();
             }
+            if (tiebreakerManager == null)
+            {
+                tiebreakerManager = FindObjectOfType<TiebreakerManager>();
+            }
         }
 
         private void SubscribeToEvents()
@@ -137,6 +148,13 @@ namespace Ubongo
                 RoundManager.OnRoundCompleted += HandleRoundCompleted;
                 RoundManager.OnRoundFailed += HandleRoundFailed;
                 RoundManager.OnGameCompleted += HandleGameCompleted;
+                RoundManager.OnSecondChanceStarted += HandleSecondChanceStarted;
+            }
+
+            if (TiebreakerManager != null)
+            {
+                TiebreakerManager.OnTiebreakerStarting += HandleTiebreakerStarting;
+                TiebreakerManager.OnTiebreakerEnded += HandleTiebreakerEnded;
             }
         }
 
@@ -149,6 +167,13 @@ namespace Ubongo
                 RoundManager.OnRoundCompleted -= HandleRoundCompleted;
                 RoundManager.OnRoundFailed -= HandleRoundFailed;
                 RoundManager.OnGameCompleted -= HandleGameCompleted;
+                RoundManager.OnSecondChanceStarted -= HandleSecondChanceStarted;
+            }
+
+            if (TiebreakerManager != null)
+            {
+                TiebreakerManager.OnTiebreakerStarting -= HandleTiebreakerStarting;
+                TiebreakerManager.OnTiebreakerEnded -= HandleTiebreakerEnded;
             }
         }
 
@@ -368,7 +393,73 @@ namespace Ubongo
 
         private void HandleGameCompleted(System.Collections.Generic.List<RoundResult> results)
         {
+            // 멀티플레이어 모드에서 동점 확인
+            if (currentMode == GameMode.Multiplayer)
+            {
+                CheckForTiebreaker();
+            }
+            else
+            {
+                ChangeState(GameState.GameComplete);
+            }
+        }
+
+        private void HandleSecondChanceStarted()
+        {
+            ChangeState(GameState.SecondChance);
+            OnSecondChanceStarted?.Invoke();
+        }
+
+        private void HandleTiebreakerStarting(System.Collections.Generic.List<TiebreakerPlayer> tiedPlayers)
+        {
+            ChangeState(GameState.Tiebreaker);
+        }
+
+        private void HandleTiebreakerEnded(TiebreakerResult result)
+        {
+            ChangeState(GameState.TiebreakerComplete);
+            OnTiebreakerEnded?.Invoke(result);
+        }
+
+        /// <summary>
+        /// 멀티플레이어 게임 종료 시 동점 확인
+        /// </summary>
+        private void CheckForTiebreaker()
+        {
+            // TODO: 실제 멀티플레이어 구현 시 플레이어 결과 수집 필요
+            // 현재는 싱글플레이어 전용이므로 바로 게임 완료 처리
             ChangeState(GameState.GameComplete);
+        }
+
+        /// <summary>
+        /// 멀티플레이어 플레이어 결과로 타이브레이커 확인 및 시작
+        /// </summary>
+        public void CheckAndStartTiebreaker(System.Collections.Generic.List<(int playerId, string name, int gemPoints, int gemCount)> playerResults)
+        {
+            if (TiebreakerManager == null)
+            {
+                ChangeState(GameState.GameComplete);
+                return;
+            }
+
+            if (TiebreakerManager.CheckForTie(playerResults))
+            {
+                TiebreakerManager.StartTiebreaker();
+            }
+            else
+            {
+                ChangeState(GameState.GameComplete);
+            }
+        }
+
+        /// <summary>
+        /// 타이브레이커 중 퍼즐 완료 처리
+        /// </summary>
+        public void CompleteTiebreakerPuzzle(int playerId)
+        {
+            if (_currentState != GameState.Tiebreaker) return;
+
+            TiebreakerManager?.RegisterPlayerCompletion(playerId);
         }
 
         private void OnDestroy()

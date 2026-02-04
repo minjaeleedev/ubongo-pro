@@ -689,15 +689,15 @@ public class GemScoreSystem
 {
     // Gems awarded based on finish position
     private static readonly int[] GemRewards = { 4, 3, 2, 1 }; // 1st, 2nd, 3rd, 4th
-    
+
     public int CalculateReward(int finishPosition, int totalPlayers)
     {
         if (finishPosition < 0 || finishPosition >= GemRewards.Length)
             return 0;
-            
+
         return GemRewards[finishPosition];
     }
-    
+
     // Bonus gems for time remaining
     public int CalculateTimeBonus(float remainingTime, float totalTime)
     {
@@ -707,6 +707,155 @@ public class GemScoreSystem
         return 0;
     }
 }
+```
+
+### 6.4 Gem Pool System (유한 보석 풀)
+
+**원본 Ubongo 3D 규칙**: 보드게임에서는 천 주머니에 담긴 유한한 보석을 랜덤으로 뽑습니다.
+총 58개의 보석으로 구성됩니다.
+
+#### 6.4.1 보석 풀 구성
+
+| 보석 유형 | 색상 | 포인트 | 초기 수량 |
+|----------|------|--------|----------|
+| Ruby | 빨강 | 4점 | 12개 |
+| Sapphire | 파랑 | 3점 | 12개 |
+| Emerald | 초록 | 2점 | 16개 |
+| Amber | 호박 | 1점 | 18개 |
+| **총합** | - | - | **58개** |
+
+#### 6.4.2 데이터 구조
+
+```csharp
+[Serializable]
+public struct GemPool
+{
+    public int Rubies;     // 초기: 12
+    public int Sapphires;  // 초기: 12
+    public int Emeralds;   // 초기: 16
+    public int Ambers;     // 초기: 18
+
+    public static GemPool CreateDefault() => new GemPool
+    {
+        Rubies = 12,
+        Sapphires = 12,
+        Emeralds = 16,
+        Ambers = 18
+    };
+
+    public int TotalRemaining => Rubies + Sapphires + Emeralds + Ambers;
+    public bool IsEmpty => TotalRemaining == 0;
+}
+
+public enum GemType
+{
+    Ruby,      // 4점
+    Sapphire,  // 3점
+    Emerald,   // 2점
+    Amber      // 1점
+}
+```
+
+#### 6.4.3 랜덤 보석 추출 로직
+
+```csharp
+public class GemPoolManager
+{
+    private GemPool pool;
+
+    public GemPoolManager()
+    {
+        pool = GemPool.CreateDefault();
+    }
+
+    /// <summary>
+    /// 풀에서 랜덤 보석을 추출합니다.
+    /// 가중치 기반 랜덤 선택 (남은 보석 수량에 비례)
+    /// </summary>
+    public GemType? DrawRandomGem()
+    {
+        if (pool.IsEmpty) return null;
+
+        int total = pool.TotalRemaining;
+        int roll = Random.Range(0, total);
+
+        // 가중치 기반 선택
+        if (roll < pool.Rubies)
+        {
+            pool.Rubies--;
+            return GemType.Ruby;
+        }
+        roll -= pool.Rubies;
+
+        if (roll < pool.Sapphires)
+        {
+            pool.Sapphires--;
+            return GemType.Sapphire;
+        }
+        roll -= pool.Sapphires;
+
+        if (roll < pool.Emeralds)
+        {
+            pool.Emeralds--;
+            return GemType.Emerald;
+        }
+
+        pool.Ambers--;
+        return GemType.Amber;
+    }
+
+    /// <summary>
+    /// 특정 유형의 보석을 추출합니다 (1등/2등 고정 보석용)
+    /// </summary>
+    public bool DrawSpecificGem(GemType type)
+    {
+        switch (type)
+        {
+            case GemType.Ruby:
+                if (pool.Rubies <= 0) return false;
+                pool.Rubies--;
+                return true;
+            case GemType.Sapphire:
+                if (pool.Sapphires <= 0) return false;
+                pool.Sapphires--;
+                return true;
+            case GemType.Emerald:
+                if (pool.Emeralds <= 0) return false;
+                pool.Emeralds--;
+                return true;
+            case GemType.Amber:
+                if (pool.Ambers <= 0) return false;
+                pool.Ambers--;
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    public GemPool GetCurrentPool() => pool;
+    public void Reset() => pool = GemPool.CreateDefault();
+}
+```
+
+#### 6.4.4 보석 소진 시 처리
+
+| 상황 | 처리 방식 |
+|------|----------|
+| 1등 고정 보석(사파이어) 소진 | 다음 높은 가치 보석으로 대체 (에메랄드) |
+| 2등 고정 보석(앰버) 소진 | 보석 없이 진행 또는 최저 가치 보석 |
+| 랜덤 보석 모두 소진 | 해당 라운드부터 보석 미지급 |
+| 전체 보석 소진 | 남은 라운드는 점수 변동 없음 |
+
+#### 6.4.5 구현 우선순위
+
+> **참고**: 유한 보석 풀은 원본 보드게임의 규칙이지만, 디지털 게임에서는
+> 무한 보석 모드를 기본으로 사용하고, 유한 모드를 옵션으로 제공할 수 있습니다.
+
+| 모드 | 설명 | 구현 우선순위 |
+|------|------|--------------|
+| Infinite (무한) | 보석 소진 없음, 항상 지급 | HIGH (기본) |
+| Finite (유한) | 58개 보석 풀, 원본 규칙 | MEDIUM (옵션) |
+| Classic | 유한 + 엄격한 원본 규칙 | LOW (옵션)
 ```
 
 ---

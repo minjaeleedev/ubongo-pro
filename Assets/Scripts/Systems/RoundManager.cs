@@ -15,7 +15,10 @@ namespace Ubongo.Systems
         InProgress,
         Completed,
         Failed,
-        Transitioning
+        Transitioning,
+        SecondChance,           // 재도전 라운드 (모든 플레이어 실패 시)
+        SecondChanceInProgress, // 재도전 진행 중
+        SecondChanceFailed      // 재도전도 실패
     }
 
     /// <summary>
@@ -86,6 +89,7 @@ namespace Ubongo.Systems
         [Header("Round Settings")]
         [SerializeField] private int totalRounds = 9;
         [SerializeField] private float transitionDelay = 2f;
+        [SerializeField] private bool enableSecondChance = true;
 
         private int _currentRound;
         private RoundState _currentState;
@@ -94,6 +98,9 @@ namespace Ubongo.Systems
         private DifficultyLevel _currentDifficulty;
         private List<RoundResult> _roundResults;
         private Coroutine _timerCoroutine;
+        private bool _isSecondChanceRound;
+        private int _playersCompletedCount;
+        private int _totalPlayersInRound;
 
         // Events
         public event Action<int, RoundConfig> OnRoundStarting;
@@ -103,6 +110,9 @@ namespace Ubongo.Systems
         public event Action<RoundResult> OnRoundFailed;
         public event Action<List<RoundResult>> OnGameCompleted;
         public event Action OnGameReset;
+        public event Action OnSecondChanceStarted;
+        public event Action<RoundResult> OnSecondChanceCompleted;
+        public event Action OnSecondChanceFailed;
 
         // Properties
         public int CurrentRound => _currentRound;
@@ -112,7 +122,9 @@ namespace Ubongo.Systems
         public float CurrentTimeLimit => _currentTimeLimit;
         public IReadOnlyList<RoundResult> RoundResults => _roundResults.AsReadOnly();
         public bool IsLastRound => _currentRound >= totalRounds;
-        public bool IsGameActive => _currentState == RoundState.InProgress;
+        public bool IsGameActive => _currentState == RoundState.InProgress || _currentState == RoundState.SecondChanceInProgress;
+        public bool IsSecondChanceRound => _isSecondChanceRound;
+        public bool EnableSecondChance => enableSecondChance;
 
         private void Awake()
         {
@@ -132,6 +144,9 @@ namespace Ubongo.Systems
             _roundResults = new List<RoundResult>();
             _currentState = RoundState.NotStarted;
             _currentRound = 0;
+            _isSecondChanceRound = false;
+            _playersCompletedCount = 0;
+            _totalPlayersInRound = 1; // 싱글플레이어 기본값
         }
 
         /// <summary>
@@ -167,6 +182,8 @@ namespace Ubongo.Systems
         private IEnumerator StartRoundSequence()
         {
             _currentState = RoundState.Starting;
+            _isSecondChanceRound = false;
+            _playersCompletedCount = 0;
 
             var config = CreateRoundConfig();
             _currentTimeLimit = config.TimeLimit;
@@ -209,7 +226,7 @@ namespace Ubongo.Systems
 
         private IEnumerator RoundTimer()
         {
-            while (_currentState == RoundState.InProgress)
+            while (_currentState == RoundState.InProgress || _currentState == RoundState.SecondChanceInProgress)
             {
                 float remaining = RemainingTime;
                 OnRoundTimeUpdated?.Invoke(remaining);
@@ -229,9 +246,17 @@ namespace Ubongo.Systems
         /// </summary>
         public void CompleteRound()
         {
+            // Second Chance 라운드 중인 경우 별도 처리
+            if (_currentState == RoundState.SecondChanceInProgress)
+            {
+                CompleteSecondChanceRound();
+                return;
+            }
+
             if (_currentState != RoundState.InProgress) return;
 
             _currentState = RoundState.Completed;
+            _isSecondChanceRound = false;
 
             if (_timerCoroutine != null)
             {
@@ -264,15 +289,30 @@ namespace Ubongo.Systems
         /// </summary>
         private void FailRound()
         {
-            if (_currentState != RoundState.InProgress) return;
-
-            _currentState = RoundState.Failed;
+            if (_currentState != RoundState.InProgress && _currentState != RoundState.SecondChanceInProgress) return;
 
             if (_timerCoroutine != null)
             {
                 StopCoroutine(_timerCoroutine);
                 _timerCoroutine = null;
             }
+
+            // Second Chance 라운드 중 실패
+            if (_currentState == RoundState.SecondChanceInProgress)
+            {
+                HandleSecondChanceFailed();
+                return;
+            }
+
+            // 일반 라운드 실패 - Second Chance 가능 여부 확인
+            // 멀티플레이어에서 모든 플레이어가 실패한 경우에만 Second Chance 발동
+            if (enableSecondChance && ShouldTriggerSecondChance())
+            {
+                StartSecondChanceRound();
+                return;
+            }
+
+            _currentState = RoundState.Failed;
 
             var result = new RoundResult(
                 roundNumber: _currentRound,
@@ -286,6 +326,130 @@ namespace Ubongo.Systems
             OnRoundFailed?.Invoke(result);
 
             StartCoroutine(TransitionToNextRound());
+        }
+
+        /// <summary>
+        /// Second Chance 발동 조건 확인
+        /// 멀티플레이어: 모든 플레이어가 실패
+        /// 싱글플레이어: 적용 안함 (false 반환)
+        /// </summary>
+        private bool ShouldTriggerSecondChance()
+        {
+            // 이미 Second Chance를 사용한 경우
+            if (_isSecondChanceRound) return false;
+
+            // 싱글플레이어는 Second Chance 미적용
+            if (_totalPlayersInRound <= 1) return false;
+
+            // 멀티플레이어: 누구도 완료하지 못한 경우에만 발동
+            return _playersCompletedCount == 0;
+        }
+
+        /// <summary>
+        /// Second Chance 라운드 시작
+        /// </summary>
+        private void StartSecondChanceRound()
+        {
+            _currentState = RoundState.SecondChance;
+            _isSecondChanceRound = true;
+
+            OnSecondChanceStarted?.Invoke();
+
+            StartCoroutine(StartSecondChanceSequence());
+        }
+
+        private IEnumerator StartSecondChanceSequence()
+        {
+            // 짧은 대기 후 재시작
+            yield return new WaitForSeconds(1f);
+
+            _currentState = RoundState.SecondChanceInProgress;
+            _roundStartTime = Time.time;
+            _playersCompletedCount = 0;
+
+            // 타이머 재시작
+            if (_timerCoroutine != null)
+            {
+                StopCoroutine(_timerCoroutine);
+            }
+            _timerCoroutine = StartCoroutine(RoundTimer());
+        }
+
+        /// <summary>
+        /// Second Chance 라운드 완료 처리
+        /// 첫 완성자만 랜덤 보석 1개 획득
+        /// </summary>
+        public void CompleteSecondChanceRound()
+        {
+            if (_currentState != RoundState.SecondChanceInProgress) return;
+
+            _currentState = RoundState.Completed;
+            _isSecondChanceRound = false;
+
+            if (_timerCoroutine != null)
+            {
+                StopCoroutine(_timerCoroutine);
+                _timerCoroutine = null;
+            }
+
+            float timeSpent = Time.time - _roundStartTime;
+
+            // Second Chance: 랜덤 보석 1개만 지급 (고정 보석 없음)
+            var gemReward = GemSystem.Instance?.AwardRandomGemOnly()
+                ?? new GemRewardResult(null, null);
+
+            var result = new RoundResult(
+                roundNumber: _currentRound,
+                completed: true,
+                timeSpent: timeSpent,
+                timeLimit: _currentTimeLimit,
+                gemReward: gemReward
+            );
+
+            _roundResults.Add(result);
+            OnSecondChanceCompleted?.Invoke(result);
+
+            StartCoroutine(TransitionToNextRound());
+        }
+
+        /// <summary>
+        /// Second Chance 라운드도 실패한 경우
+        /// </summary>
+        private void HandleSecondChanceFailed()
+        {
+            _currentState = RoundState.SecondChanceFailed;
+            _isSecondChanceRound = false;
+
+            OnSecondChanceFailed?.Invoke();
+
+            var result = new RoundResult(
+                roundNumber: _currentRound,
+                completed: false,
+                timeSpent: _currentTimeLimit * 2, // 총 2번의 시간 사용
+                timeLimit: _currentTimeLimit,
+                gemReward: new GemRewardResult(null, null)
+            );
+
+            _roundResults.Add(result);
+            OnRoundFailed?.Invoke(result);
+
+            StartCoroutine(TransitionToNextRound());
+        }
+
+        /// <summary>
+        /// 멀티플레이어 플레이어 수 설정
+        /// </summary>
+        public void SetTotalPlayers(int count)
+        {
+            _totalPlayersInRound = Mathf.Max(1, count);
+        }
+
+        /// <summary>
+        /// 플레이어 완료 등록 (멀티플레이어용)
+        /// </summary>
+        public void RegisterPlayerCompletion()
+        {
+            _playersCompletedCount++;
         }
 
         private IEnumerator TransitionToNextRound()
