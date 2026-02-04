@@ -378,6 +378,12 @@ namespace Ubongo.Systems
                 return;
             }
             _instance = this;
+
+            // DontDestroyOnLoad은 루트 오브젝트에만 적용 가능
+            if (transform.parent != null)
+            {
+                transform.SetParent(null);
+            }
             DontDestroyOnLoad(gameObject);
 
             InitializeGemCollection();

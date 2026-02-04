@@ -188,7 +188,7 @@ namespace Ubongo.Editor
         private static void CreateUI()
         {
             // Find or create Canvas
-            Canvas canvas = Object.FindObjectOfType<Canvas>();
+            Canvas canvas = Object.FindFirstObjectByType<Canvas>();
             if (canvas == null)
             {
                 GameObject canvasObj = new GameObject("Canvas");
@@ -417,14 +417,14 @@ namespace Ubongo.Editor
         private static void ConnectReferences()
         {
             // Find UIManager and connect panel references
-            var uiManager = Object.FindObjectOfType<Ubongo.UIManager>();
+            var uiManager = Object.FindFirstObjectByType<Ubongo.UIManager>();
             if (uiManager == null)
             {
                 Debug.LogWarning("[SceneSetupTool] UIManager not found - cannot connect references");
                 return;
             }
 
-            Canvas canvas = Object.FindObjectOfType<Canvas>();
+            Canvas canvas = Object.FindFirstObjectByType<Canvas>();
             if (canvas == null) return;
 
             // Use SerializedObject to set private serialized fields
@@ -487,15 +487,15 @@ namespace Ubongo.Editor
             serializedUI.ApplyModifiedProperties();
 
             // Connect GameManager references
-            var gameManager = Object.FindObjectOfType<Ubongo.GameManager>();
+            var gameManager = Object.FindFirstObjectByType<Ubongo.GameManager>();
             if (gameManager != null)
             {
                 SerializedObject serializedGM = new SerializedObject(gameManager);
 
-                var gemSystem = Object.FindObjectOfType<Ubongo.Systems.GemSystem>();
-                var roundManager = Object.FindObjectOfType<Ubongo.Systems.RoundManager>();
-                var difficultySystem = Object.FindObjectOfType<Ubongo.Systems.DifficultySystem>();
-                var tiebreakerManager = Object.FindObjectOfType<Ubongo.Systems.TiebreakerManager>();
+                var gemSystem = Object.FindFirstObjectByType<Ubongo.Systems.GemSystem>();
+                var roundManager = Object.FindFirstObjectByType<Ubongo.Systems.RoundManager>();
+                var difficultySystem = Object.FindFirstObjectByType<Ubongo.Systems.DifficultySystem>();
+                var tiebreakerManager = Object.FindFirstObjectByType<Ubongo.Systems.TiebreakerManager>();
 
                 SetSerializedReference(serializedGM, "gemSystem", gemSystem);
                 SetSerializedReference(serializedGM, "roundManager", roundManager);

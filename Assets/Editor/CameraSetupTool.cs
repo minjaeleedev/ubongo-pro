@@ -35,7 +35,7 @@ namespace Ubongo.Editor
 
             // Setup Directional Light
             Light directionalLight = null;
-            Light[] lights = Object.FindObjectsOfType<Light>();
+            Light[] lights = Object.FindObjectsByType<Light>(FindObjectsSortMode.None);
             foreach (var light in lights)
             {
                 if (light.type == LightType.Directional)
@@ -72,7 +72,7 @@ namespace Ubongo.Editor
         public static void CreateGameManager()
         {
             // Check if GameManager already exists
-            var existingGM = Object.FindObjectOfType<GameManager>();
+            var existingGM = Object.FindFirstObjectByType<GameManager>();
             if (existingGM != null)
             {
                 Debug.Log("[CameraSetupTool] GameManager already exists in scene");

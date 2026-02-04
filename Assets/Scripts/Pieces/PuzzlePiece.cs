@@ -76,7 +76,6 @@ namespace Ubongo
         private Coroutine pulseCoroutine;
         private Coroutine shakeCoroutine;
         private Vector3 lastValidPosition;
-        private bool isOverValidPosition = false;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -644,7 +643,6 @@ namespace Ubongo
                 {
                     SetState(PlacementState.ValidPlacement);
                 }
-                isOverValidPosition = true;
                 lastValidPosition = gameBoard.GridToWorld(gridPos.x, gridPos.y, gridPos.z);
             }
             else
@@ -653,7 +651,6 @@ namespace Ubongo
                 {
                     SetState(PlacementState.InvalidPlacement);
                 }
-                isOverValidPosition = false;
             }
 
             gameBoard.HighlightValidPlacement(gridPos, this);

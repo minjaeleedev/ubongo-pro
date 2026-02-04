@@ -68,6 +68,8 @@ namespace Ubongo
         [SerializeField] private RoundManager roundManager;
         [SerializeField] private DifficultySystem difficultySystem;
         [SerializeField] private TiebreakerManager tiebreakerManager;
+        [SerializeField] private LevelGenerator levelGenerator;
+        [SerializeField] private GameBoard gameBoard;
 
         private GameState _currentState = GameState.Menu;
         private int _bonusScore = 0;
@@ -102,6 +104,8 @@ namespace Ubongo
         public RoundManager RoundManager => roundManager;
         public DifficultySystem DifficultySystem => difficultySystem;
         public TiebreakerManager TiebreakerManager => tiebreakerManager;
+        public LevelGenerator LevelGenerator => levelGenerator;
+        public GameBoard GameBoard => gameBoard;
 
         // Computed Properties
         public int CurrentRound => RoundManager?.CurrentRound ?? 0;
@@ -137,6 +141,17 @@ namespace Ubongo
             roundManager = RoundManager.Instance;
             difficultySystem = DifficultySystem.Instance;
             tiebreakerManager = TiebreakerManager.Instance;
+
+            // LevelGenerator와 GameBoard는 씬에서 찾기
+            levelGenerator = FindAnyObjectByType<LevelGenerator>();
+            gameBoard = FindAnyObjectByType<GameBoard>();
+
+            // GameBoard가 없으면 동적 생성
+            if (gameBoard == null)
+            {
+                var boardObject = new GameObject("GameBoard");
+                gameBoard = boardObject.AddComponent<GameBoard>();
+            }
         }
 
         private void SubscribeToEvents()
@@ -428,6 +443,20 @@ namespace Ubongo
 
         private void HandleRoundStarted(int round)
         {
+            // 퍼즐 생성
+            if (levelGenerator != null)
+            {
+                var levelData = levelGenerator.GetLevelData(round);
+
+                if (gameBoard != null)
+                {
+                    gameBoard.InitializeGrid(levelData.BoardSize);
+                    gameBoard.SetTargetArea(levelData.TargetArea);
+                }
+
+                levelGenerator.GenerateLevel(round);
+            }
+
             ChangeState(GameState.Playing);
         }
 
