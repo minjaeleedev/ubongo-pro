@@ -130,7 +130,8 @@ namespace Ubongo
         private void Start()
         {
             SubscribeToEvents();
-            ChangeState(GameState.Menu);
+            // UI가 없는 동안 자동으로 게임 시작
+            StartGame(DifficultyLevelSystem.Easy);
         }
 
         private void InitializeSystemReferences()
@@ -151,6 +152,13 @@ namespace Ubongo
             {
                 var boardObject = new GameObject("GameBoard");
                 gameBoard = boardObject.AddComponent<GameBoard>();
+            }
+
+            // InputManager가 없으면 동적 생성
+            if (InputManager.Instance == null)
+            {
+                var inputManagerObject = new GameObject("InputManager");
+                inputManagerObject.AddComponent<InputManager>();
             }
         }
 

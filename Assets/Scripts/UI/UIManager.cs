@@ -509,8 +509,16 @@ namespace Ubongo
 
         private void ShowPanel(GameObject panel)
         {
-            if (panel != null)
-                panel.SetActive(true);
+            if (panel == null) return;
+            panel.SetActive(true);
+
+            // 패널 배경 Image를 투명하게 (검정 오버레이 제거)
+            var image = panel.GetComponent<UnityEngine.UI.Image>();
+            if (image != null)
+            {
+                image.color = new Color(0f, 0f, 0f, 0f);
+                image.raycastTarget = false;
+            }
         }
 
         private void OnStartGame()

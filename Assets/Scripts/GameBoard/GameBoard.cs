@@ -94,6 +94,25 @@ namespace Ubongo
                     }
                 }
             }
+
+            AddBoardCollider();
+        }
+
+        private void AddBoardCollider()
+        {
+            BoxCollider boardCollider = boardContainer.GetComponent<BoxCollider>();
+            if (boardCollider == null)
+            {
+                boardCollider = boardContainer.AddComponent<BoxCollider>();
+            }
+
+            float totalCellSize = cellSize + cellSpacing;
+            boardCollider.size = new Vector3(
+                width * totalCellSize,
+                0.1f,
+                depth * totalCellSize
+            );
+            boardCollider.center = new Vector3(0, -0.05f, 0);
         }
 
         private void CreateCell(int x, int y, int z, Vector3 position)

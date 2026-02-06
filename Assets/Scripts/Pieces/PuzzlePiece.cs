@@ -76,6 +76,7 @@ namespace Ubongo
         private Coroutine pulseCoroutine;
         private Coroutine shakeCoroutine;
         private Vector3 lastValidPosition;
+        private bool subscribedToInput = false;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -107,6 +108,7 @@ namespace Ubongo
         private void SubscribeToInputEvents()
         {
             if (InputManager.Instance == null) return;
+            if (subscribedToInput) return;
 
             InputManager.Instance.OnPieceHoverEnter += HandleHoverEnter;
             InputManager.Instance.OnPieceHoverExit += HandleHoverExit;
@@ -114,6 +116,7 @@ namespace Ubongo
             InputManager.Instance.OnPieceDrag += HandleDrag;
             InputManager.Instance.OnPieceSelectEnd += HandleSelectEnd;
             InputManager.Instance.OnPieceRotate += HandleRotate;
+            subscribedToInput = true;
         }
 
         private void UnsubscribeFromInputEvents()
@@ -235,6 +238,11 @@ namespace Ubongo
 
         private void Update()
         {
+            if (!subscribedToInput && InputManager.Instance != null)
+            {
+                SubscribeToInputEvents();
+            }
+
             if (isDragging)
             {
                 UpdatePlacementPreview();
