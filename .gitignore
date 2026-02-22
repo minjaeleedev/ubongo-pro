@@ -86,3 +86,6 @@ Thumbs.db
 *.code-workspace
 
 .serena
+
+# Code Coverage Result
+CodeCoverage

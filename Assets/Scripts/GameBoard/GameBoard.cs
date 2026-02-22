@@ -3,19 +3,23 @@ using System;
 using System.Collections.Generic;
 using UnityEngine.Rendering;
 using Ubongo.Core;
+using Ubongo.Domain.Board;
 
 namespace Ubongo
 {
     public class GameBoard : MonoBehaviour
     {
         private const int UbongoHeight = 2;
+        private const int MinimumBoardDimension = 1;
         private const string BoardLayerName = "Board";
         private const string CellVisualName = "Visual";
         private const string CellGridOverlayName = "GridOverlay";
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
         [Header("Board Settings")]
-        [SerializeField] private int width = 4;
-        [SerializeField] private int depth = 2;
+        [SerializeField, Min(MinimumBoardDimension)] private int width = 4;
+        [SerializeField, Min(MinimumBoardDimension)] private int depth = 2;
         [SerializeField] private float cellSize = 1f;
         [SerializeField] private float cellSpacing = 0.1f;
 
@@ -33,11 +37,13 @@ namespace Ubongo
 
         private BoardCell[,,] grid;
         private TargetArea targetArea;
-        private bool[,,] occupancyGrid;
-        private PuzzleValidator validator;
+        private BoardState boardState;
+        private BoardPlacementService placementService;
+        private BoardWinConditionService winConditionService;
         private GameObject boardContainer;
         private int boardLayerIndex = -1;
         private Material gridLineMaterial;
+        private MaterialPropertyBlock boardColorPropertyBlock;
 
         public int Width => width;
         public int Height => UbongoHeight;
@@ -53,7 +59,11 @@ namespace Ubongo
 
         private void Awake()
         {
-            validator = new PuzzleValidator();
+            NormalizeBoardDimensions();
+            placementService = new BoardPlacementService();
+            winConditionService = new BoardWinConditionService();
+            boardState = new BoardState(width, UbongoHeight, depth);
+
             boardLayerIndex = LayerMask.NameToLayer(BoardLayerName);
             if (boardLayerIndex < 0)
             {
@@ -69,6 +79,9 @@ namespace Ubongo
 
         private void InitializeBoard()
         {
+            NormalizeBoardDimensions();
+            EnsureBoardState();
+            boardState.Resize(width, UbongoHeight, depth);
             CreateBoardContainer();
             CreateGrid();
             SetupDefaultTargetArea();
@@ -78,7 +91,7 @@ namespace Ubongo
         {
             if (boardContainer != null)
             {
-                Destroy(boardContainer);
+                UnityObjectUtility.SafeDestroy(boardContainer);
             }
 
             boardContainer = new GameObject("BoardContainer");
@@ -90,7 +103,6 @@ namespace Ubongo
         private void CreateGrid()
         {
             grid = new BoardCell[width, UbongoHeight, depth];
-            occupancyGrid = new bool[width, UbongoHeight, depth];
             float totalCellSize = cellSize + cellSpacing;
 
             Vector3 startPos = new Vector3(
@@ -192,17 +204,17 @@ namespace Ubongo
             Collider visualCollider = visual.GetComponent<Collider>();
             if (visualCollider != null)
             {
-                Destroy(visualCollider);
+                UnityObjectUtility.SafeDestroy(visualCollider);
             }
 
             Renderer renderer = visual.GetComponent<Renderer>();
             if (defaultMaterial != null)
             {
-                renderer.material = defaultMaterial;
+                renderer.sharedMaterial = defaultMaterial;
             }
             else
             {
-                renderer.material.color = new Color(0.8f, 0.8f, 0.8f, 0.3f);
+                ApplyRendererColor(renderer, new Color(0.8f, 0.8f, 0.8f, 0.3f));
             }
 
             return cell;
@@ -244,7 +256,7 @@ namespace Ubongo
             {
                 if (overlayTransform != null)
                 {
-                    Destroy(overlayTransform.gameObject);
+                    UnityObjectUtility.SafeDestroy(overlayTransform.gameObject);
                 }
                 return;
             }
@@ -283,7 +295,7 @@ namespace Ubongo
             lineRenderer.endColor = gridLineColor;
             lineRenderer.shadowCastingMode = ShadowCastingMode.Off;
             lineRenderer.receiveShadows = false;
-            lineRenderer.material = GetGridLineMaterial();
+            lineRenderer.sharedMaterial = GetGridLineMaterial();
         }
 
         private Material GetGridLineMaterial()
@@ -332,10 +344,15 @@ namespace Ubongo
         /// </summary>
         public void InitializeGrid(Vector3Int size)
         {
-            width = size.x;
-            depth = size.z;
-
             ClearBoard();
+
+            Vector2Int normalizedSize = NormalizeBoardSize(size.x, size.z);
+            width = normalizedSize.x;
+            depth = normalizedSize.y;
+
+            EnsureBoardState();
+            boardState.Resize(width, UbongoHeight, depth);
+
             CreateBoardContainer();
             CreateGrid();
             SetupDefaultTargetArea();
@@ -377,12 +394,7 @@ namespace Ubongo
 
         public bool IsOccupied(int x, int y, int z)
         {
-            if (x < 0 || x >= width || y < 0 || y >= UbongoHeight || z < 0 || z >= depth)
-            {
-                return false;
-            }
-
-            return occupancyGrid[x, y, z];
+            return boardState != null && boardState.IsOccupied(new Vector3Int(x, y, z));
         }
 
         public bool IsWithinBounds(Vector3Int position)
@@ -453,34 +465,7 @@ namespace Ubongo
         /// </summary>
         public bool CanPlacePiece(PuzzlePiece piece, Vector3Int gridPosition)
         {
-            List<Vector3Int> pieceBlocks = piece.GetBlockPositions();
-
-            foreach (Vector3Int block in pieceBlocks)
-            {
-                Vector3Int checkPos = gridPosition + block;
-
-                // Check grid bounds
-                if (checkPos.x < 0 || checkPos.x >= width ||
-                    checkPos.y < 0 || checkPos.y >= UbongoHeight ||
-                    checkPos.z < 0 || checkPos.z >= depth)
-                {
-                    return false;
-                }
-
-                // Check target area
-                if (targetArea != null && !targetArea.Contains(checkPos.x, checkPos.z))
-                {
-                    return false;
-                }
-
-                // Check occupation
-                if (occupancyGrid[checkPos.x, checkPos.y, checkPos.z])
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return ValidatePlacement(piece, gridPosition) == PlacementValidity.Valid;
         }
 
         /// <summary>
@@ -488,39 +473,13 @@ namespace Ubongo
         /// </summary>
         public PlacementValidity ValidatePlacement(PuzzlePiece piece, Vector3Int gridPosition)
         {
-            List<Vector3Int> pieceBlocks = piece.GetBlockPositions();
-
-            foreach (Vector3Int block in pieceBlocks)
+            if (piece == null || placementService == null || boardState == null)
             {
-                Vector3Int checkPos = gridPosition + block;
-
-                // Check bounds
-                if (checkPos.x < 0 || checkPos.x >= width ||
-                    checkPos.z < 0 || checkPos.z >= depth)
-                {
-                    return PlacementValidity.OutOfBounds;
-                }
-
-                // Check height constraint (Ubongo 3D: exactly 2 layers)
-                if (checkPos.y < 0 || checkPos.y >= UbongoHeight)
-                {
-                    return PlacementValidity.HeightExceeded;
-                }
-
-                // Check target area
-                if (targetArea != null && !targetArea.Contains(checkPos.x, checkPos.z))
-                {
-                    return PlacementValidity.OutsideTarget;
-                }
-
-                // Check occupation
-                if (occupancyGrid[checkPos.x, checkPos.y, checkPos.z])
-                {
-                    return PlacementValidity.Collision;
-                }
+                return PlacementValidity.OutOfBounds;
             }
 
-            return PlacementValidity.Valid;
+            List<Vector3Int> worldCells = BuildWorldCells(piece.GetBlockPositions(), gridPosition);
+            return placementService.Validate(boardState, targetArea, worldCells);
         }
 
         /// <summary>
@@ -528,14 +487,26 @@ namespace Ubongo
         /// </summary>
         public void PlacePiece(PuzzlePiece piece, Vector3Int gridPosition)
         {
-            List<Vector3Int> pieceBlocks = piece.GetBlockPositions();
-
-            foreach (Vector3Int block in pieceBlocks)
+            if (piece == null || boardState == null || placementService == null)
             {
-                Vector3Int cellPos = gridPosition + block;
-                occupancyGrid[cellPos.x, cellPos.y, cellPos.z] = true;
+                return;
+            }
 
-                BoardCell cell = grid[cellPos.x, cellPos.y, cellPos.z];
+            List<Vector3Int> worldCells = BuildWorldCells(piece.GetBlockPositions(), gridPosition);
+            if (placementService.Validate(boardState, targetArea, worldCells) != PlacementValidity.Valid)
+            {
+                return;
+            }
+
+            if (!boardState.TryPlace(GetPieceId(piece), worldCells))
+            {
+                return;
+            }
+
+            for (int i = 0; i < worldCells.Count; i++)
+            {
+                Vector3Int cellPos = worldCells[i];
+                BoardCell cell = GetCell(cellPos.x, cellPos.y, cellPos.z);
                 if (cell != null)
                 {
                     cell.SetOccupied(true, piece);
@@ -552,20 +523,50 @@ namespace Ubongo
         /// </summary>
         public void RemovePiece(PuzzlePiece piece)
         {
-            for (int x = 0; x < width; x++)
+            if (piece == null || boardState == null)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                return;
+            }
+
+            string pieceId = GetPieceId(piece);
+            if (boardState.Remove(pieceId, out IReadOnlyList<Vector3Int> removedCells) && removedCells != null)
+            {
+                for (int i = 0; i < removedCells.Count; i++)
                 {
-                    for (int z = 0; z < depth; z++)
+                    Vector3Int removed = removedCells[i];
+                    BoardCell cell = GetCell(removed.x, removed.y, removed.z);
+                    if (cell != null)
                     {
-                        BoardCell cell = grid[x, y, z];
-                        if (cell != null && cell.OccupyingPiece == piece)
+                        cell.SetOccupied(false, null);
+                    }
+                }
+            }
+            else
+            {
+                // Defensive fallback for legacy states where piece index was not recorded.
+                for (int x = 0; x < width; x++)
+                {
+                    for (int y = 0; y < UbongoHeight; y++)
+                    {
+                        for (int z = 0; z < depth; z++)
                         {
-                            cell.SetOccupied(false, null);
-                            occupancyGrid[x, y, z] = false;
+                            BoardCell cell = grid[x, y, z];
+                            if (cell == null || !cell.IsOccupied)
+                            {
+                                continue;
+                            }
+
+                            bool matchesPieceReference = cell.OccupyingPiece == piece;
+                            bool matchesPieceId = !string.IsNullOrWhiteSpace(cell.OccupyingPieceId) &&
+                                                  string.Equals(cell.OccupyingPieceId, pieceId, StringComparison.Ordinal);
+                            if (matchesPieceReference || matchesPieceId)
+                            {
+                                cell.SetOccupied(false, null);
+                            }
                         }
                     }
                 }
+                RebuildBoardStateFromCells();
             }
 
             piece.SetPlaced(false);
@@ -577,12 +578,12 @@ namespace Ubongo
         /// </summary>
         private void CheckWinCondition()
         {
-            if (targetArea == null)
+            if (targetArea == null || winConditionService == null || boardState == null)
             {
                 return;
             }
 
-            ValidationResult result = validator.ValidateSolution(occupancyGrid, targetArea);
+            ValidationResult result = winConditionService.ValidateSolution(boardState, targetArea);
 
             if (result.IsSolved)
             {
@@ -596,12 +597,12 @@ namespace Ubongo
         /// </summary>
         public FillState GetFillState()
         {
-            if (validator == null || targetArea == null)
+            if (winConditionService == null || boardState == null || targetArea == null)
             {
                 return new FillState(0, 0, 0);
             }
 
-            return validator.CalculateFillState(occupancyGrid, targetArea);
+            return winConditionService.CalculateFillState(boardState, targetArea);
         }
 
         private void NotifyFillStateChanged()
@@ -661,6 +662,11 @@ namespace Ubongo
         /// </summary>
         public void ClearBoard()
         {
+            if (boardState != null)
+            {
+                boardState.Clear();
+            }
+
             if (grid != null)
             {
                 for (int x = 0; x < width; x++)
@@ -672,10 +678,6 @@ namespace Ubongo
                             if (grid[x, y, z] != null)
                             {
                                 grid[x, y, z].SetOccupied(false, null);
-                            }
-                            if (occupancyGrid != null)
-                            {
-                                occupancyGrid[x, y, z] = false;
                             }
                         }
                     }
@@ -733,8 +735,92 @@ namespace Ubongo
             }
         }
 
+        private static string GetPieceId(PuzzlePiece piece)
+        {
+            return piece == null ? string.Empty : piece.GetInstanceID().ToString();
+        }
+
+        private static List<Vector3Int> BuildWorldCells(IReadOnlyList<Vector3Int> localBlocks, Vector3Int gridPosition)
+        {
+            List<Vector3Int> worldCells = new List<Vector3Int>(localBlocks?.Count ?? 0);
+            if (localBlocks == null)
+            {
+                return worldCells;
+            }
+
+            for (int i = 0; i < localBlocks.Count; i++)
+            {
+                worldCells.Add(gridPosition + localBlocks[i]);
+            }
+
+            return worldCells;
+        }
+
+        private void RebuildBoardStateFromCells()
+        {
+            if (boardState == null)
+            {
+                return;
+            }
+
+            boardState.Resize(width, UbongoHeight, depth);
+
+            if (grid == null)
+            {
+                return;
+            }
+
+            Dictionary<string, List<Vector3Int>> pieceCellsById = new Dictionary<string, List<Vector3Int>>();
+            int orphanedOccupiedCells = 0;
+
+            for (int x = 0; x < width; x++)
+            {
+                for (int y = 0; y < UbongoHeight; y++)
+                {
+                    for (int z = 0; z < depth; z++)
+                    {
+                        BoardCell cell = grid[x, y, z];
+                        if (cell == null || !cell.IsOccupied)
+                        {
+                            continue;
+                        }
+
+                        string pieceId = cell.OccupyingPieceId;
+                        if (string.IsNullOrWhiteSpace(pieceId))
+                        {
+                            orphanedOccupiedCells++;
+                            cell.SetOccupied(false, null);
+                            continue;
+                        }
+
+                        if (!pieceCellsById.TryGetValue(pieceId, out List<Vector3Int> cells))
+                        {
+                            cells = new List<Vector3Int>();
+                            pieceCellsById[pieceId] = cells;
+                        }
+
+                        cells.Add(new Vector3Int(x, y, z));
+                    }
+                }
+            }
+
+            foreach (KeyValuePair<string, List<Vector3Int>> entry in pieceCellsById)
+            {
+                if (!boardState.TryPlace(entry.Key, entry.Value))
+                {
+                    Debug.LogWarning($"[{nameof(GameBoard)}] Failed to rebuild board state for piece '{entry.Key}'.");
+                }
+            }
+
+            if (orphanedOccupiedCells > 0)
+            {
+                Debug.LogWarning($"[{nameof(GameBoard)}] Cleared {orphanedOccupiedCells} orphaned occupied cells while rebuilding board state.");
+            }
+        }
+
         private void OnValidate()
         {
+            NormalizeBoardDimensions();
             boardFootprintRatio = Mathf.Clamp(boardFootprintRatio, 0.75f, 1f);
             gridLineWidth = Mathf.Max(0.002f, gridLineWidth);
             gridLineYOffset = Mathf.Max(0f, gridLineYOffset);
@@ -767,9 +853,68 @@ namespace Ubongo
         {
             if (gridLineMaterial != null)
             {
-                Destroy(gridLineMaterial);
+                UnityObjectUtility.SafeDestroy(gridLineMaterial);
                 gridLineMaterial = null;
             }
+        }
+
+        private void NormalizeBoardDimensions()
+        {
+            width = Mathf.Max(MinimumBoardDimension, width);
+            depth = Mathf.Max(MinimumBoardDimension, depth);
+        }
+
+        private static Vector2Int NormalizeBoardSize(int candidateWidth, int candidateDepth)
+        {
+            int normalizedWidth = Mathf.Max(MinimumBoardDimension, candidateWidth);
+            int normalizedDepth = Mathf.Max(MinimumBoardDimension, candidateDepth);
+            return new Vector2Int(normalizedWidth, normalizedDepth);
+        }
+
+        private void EnsureBoardState()
+        {
+            if (boardState != null)
+            {
+                return;
+            }
+
+            boardState = new BoardState(width, UbongoHeight, depth);
+        }
+
+        private void ApplyRendererColor(Renderer renderer, Color color)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            if (boardColorPropertyBlock == null)
+            {
+                boardColorPropertyBlock = new MaterialPropertyBlock();
+            }
+
+            int colorPropertyId = ResolveColorPropertyId(renderer.sharedMaterial);
+            renderer.GetPropertyBlock(boardColorPropertyBlock);
+            boardColorPropertyBlock.SetColor(colorPropertyId, color);
+            renderer.SetPropertyBlock(boardColorPropertyBlock);
+        }
+
+        private static int ResolveColorPropertyId(Material material)
+        {
+            if (material != null)
+            {
+                if (material.HasProperty(BaseColorPropertyId))
+                {
+                    return BaseColorPropertyId;
+                }
+
+                if (material.HasProperty(ColorPropertyId))
+                {
+                    return ColorPropertyId;
+                }
+            }
+
+            return ColorPropertyId;
         }
     }
 }

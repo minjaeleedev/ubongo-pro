@@ -5,6 +5,8 @@ namespace Ubongo
     public class BoardCell : MonoBehaviour
     {
         private const string VisualChildName = "Visual";
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
         private int x, y, z;
         private bool isOccupied = false;
@@ -12,7 +14,10 @@ namespace Ubongo
         private bool isHighlighted = false;
         private bool isHighlightValid = true;
         private PuzzlePiece occupyingPiece;
+        private string occupyingPieceId = string.Empty;
         private Renderer cellRenderer;
+        private MaterialPropertyBlock colorPropertyBlock;
+        private int colorPropertyId = -1;
         
         [Header("Visual Feedback")]
         [SerializeField] private Color baseColor = new Color(0.34f, 0.4f, 0.5f, 0.5f);
@@ -27,6 +32,7 @@ namespace Ubongo
         public bool IsOccupied => isOccupied;
         public bool IsTarget => isTarget;
         public PuzzlePiece OccupyingPiece => occupyingPiece;
+        public string OccupyingPieceId => occupyingPieceId;
         public Renderer VisualRenderer => cellRenderer;
         
         public void Initialize(int gridX, int gridY, int gridZ, GameBoard _)
@@ -70,6 +76,9 @@ namespace Ubongo
         {
             isOccupied = occupied;
             occupyingPiece = piece;
+            occupyingPieceId = occupied && piece != null
+                ? piece.GetInstanceID().ToString()
+                : string.Empty;
             if (occupied)
             {
                 isHighlighted = false;
@@ -95,26 +104,73 @@ namespace Ubongo
 
             if (isHighlighted)
             {
-                cellRenderer.material.color = isHighlightValid ? highlightValidColor : highlightInvalidColor;
+                ApplyColor(isHighlightValid ? highlightValidColor : highlightInvalidColor);
                 cellRenderer.enabled = true;
                 return;
             }
 
             if (isOccupied)
             {
-                cellRenderer.material.color = occupiedColor;
+                ApplyColor(occupiedColor);
                 cellRenderer.enabled = false;
             }
             else if (isTarget)
             {
-                cellRenderer.material.color = targetColor;
+                ApplyColor(targetColor);
                 cellRenderer.enabled = true;
             }
             else
             {
-                cellRenderer.material.color = baseColor;
+                ApplyColor(baseColor);
                 cellRenderer.enabled = true;
             }
+        }
+
+        private void ApplyColor(Color color)
+        {
+            if (cellRenderer == null)
+            {
+                return;
+            }
+
+            EnsureColorPropertyState();
+            cellRenderer.GetPropertyBlock(colorPropertyBlock);
+            colorPropertyBlock.SetColor(colorPropertyId, color);
+            cellRenderer.SetPropertyBlock(colorPropertyBlock);
+        }
+
+        private void EnsureColorPropertyState()
+        {
+            if (colorPropertyBlock == null)
+            {
+                colorPropertyBlock = new MaterialPropertyBlock();
+            }
+
+            if (colorPropertyId != -1)
+            {
+                return;
+            }
+
+            Material material = cellRenderer != null ? cellRenderer.sharedMaterial : null;
+            colorPropertyId = ResolveColorPropertyId(material);
+        }
+
+        private static int ResolveColorPropertyId(Material material)
+        {
+            if (material != null)
+            {
+                if (material.HasProperty(BaseColorPropertyId))
+                {
+                    return BaseColorPropertyId;
+                }
+
+                if (material.HasProperty(ColorPropertyId))
+                {
+                    return ColorPropertyId;
+                }
+            }
+
+            return ColorPropertyId;
         }
         
         private void OnTriggerEnter(Collider _)

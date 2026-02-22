@@ -11,6 +11,9 @@ namespace Ubongo.Tests.PlayMode
 {
     public class BoardHighlightPlayModeTests
     {
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
+
         [UnityTest]
         public IEnumerator ClearHighlights_RestoresTargetColor()
         {
@@ -24,14 +27,14 @@ namespace Ubongo.Tests.PlayMode
 
             Renderer renderer = targetCell.VisualRenderer;
             Assert.IsNotNull(renderer);
-            Color baseColor = renderer.material.color;
+            Color baseColor = GetRendererColor(renderer);
 
             targetCell.SetHighlight(true, true);
-            Assert.IsFalse(AreColorsClose(baseColor, renderer.material.color));
+            Assert.IsFalse(AreColorsClose(baseColor, GetRendererColor(renderer)));
 
             board.ClearHighlights();
             yield return null;
-            Assert.IsTrue(AreColorsClose(baseColor, renderer.material.color));
+            Assert.IsTrue(AreColorsClose(baseColor, GetRendererColor(renderer)));
 
             Object.DestroyImmediate(boardObject);
         }
@@ -64,11 +67,11 @@ namespace Ubongo.Tests.PlayMode
             Assert.IsNotNull(floorRenderer);
             Assert.IsNotNull(upperRenderer);
 
-            Color floorBaseColor = floorRenderer.material.color;
+            Color floorBaseColor = GetRendererColor(floorRenderer);
             board.HighlightValidPlacement(Vector3Int.zero, piece);
             yield return null;
 
-            Assert.IsFalse(AreColorsClose(floorBaseColor, floorRenderer.material.color));
+            Assert.IsFalse(AreColorsClose(floorBaseColor, GetRendererColor(floorRenderer)));
             Assert.IsFalse(upperRenderer.enabled);
 
             Object.DestroyImmediate(pieceObject);
@@ -305,9 +308,9 @@ namespace Ubongo.Tests.PlayMode
             Renderer renderer = floorCell.VisualRenderer;
             Assert.IsNotNull(renderer);
 
-            Color targetColor = renderer.material.color;
+            Color targetColor = GetRendererColor(renderer);
             floorCell.SetHighlight(true, true);
-            Color validColor = renderer.material.color;
+            Color validColor = GetRendererColor(renderer);
 
             Assert.Greater(ColorDistance(targetColor, validColor), 0.35f);
 
@@ -371,6 +374,46 @@ namespace Ubongo.Tests.PlayMode
                    Mathf.Abs(a.g - b.g) <= tolerance &&
                    Mathf.Abs(a.b - b.b) <= tolerance &&
                    Mathf.Abs(a.a - b.a) <= tolerance;
+        }
+
+        private static Color GetRendererColor(Renderer renderer)
+        {
+            Assert.IsNotNull(renderer);
+
+            Material shared = renderer.sharedMaterial;
+            int colorPropertyId = ResolveColorPropertyId(shared);
+
+            if (renderer.HasPropertyBlock())
+            {
+                MaterialPropertyBlock block = new MaterialPropertyBlock();
+                renderer.GetPropertyBlock(block);
+                return block.GetColor(colorPropertyId);
+            }
+
+            if (shared != null && shared.HasProperty(colorPropertyId))
+            {
+                return shared.GetColor(colorPropertyId);
+            }
+
+            return Color.white;
+        }
+
+        private static int ResolveColorPropertyId(Material material)
+        {
+            if (material != null)
+            {
+                if (material.HasProperty(BaseColorPropertyId))
+                {
+                    return BaseColorPropertyId;
+                }
+
+                if (material.HasProperty(ColorPropertyId))
+                {
+                    return ColorPropertyId;
+                }
+            }
+
+            return ColorPropertyId;
         }
 
         private static float ColorDistance(Color a, Color b)

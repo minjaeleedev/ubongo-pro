@@ -19,6 +19,8 @@ namespace Ubongo
     public class PuzzlePiece : MonoBehaviour
     {
         private const string PieceLayerName = "Piece";
+        private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
+        private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
         [Header("Piece Configuration")]
         [SerializeField] private List<Vector3Int> blockPositions = new List<Vector3Int>();
@@ -90,6 +92,9 @@ namespace Ubongo
         private Coroutine hoverLiftCoroutine;
         private Vector3 hoverStartPosition;
         private bool hasHoverStartPosition;
+        private readonly Dictionary<int, Color> rendererColorCache = new Dictionary<int, Color>();
+        private MaterialPropertyBlock colorPropertyBlock;
+        private Color currentOutlineColor = Color.clear;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -332,14 +337,20 @@ namespace Ubongo
             foreach (GameObject block in blockObjects)
             {
                 if (block != null)
-                    Destroy(block);
+                {
+                    RemoveCachedRendererColor(block);
+                    UnityObjectUtility.SafeDestroy(block);
+                }
             }
             blockObjects.Clear();
 
             foreach (GameObject outline in outlineObjects)
             {
                 if (outline != null)
-                    Destroy(outline);
+                {
+                    RemoveCachedRendererColor(outline);
+                    UnityObjectUtility.SafeDestroy(outline);
+                }
             }
             outlineObjects.Clear();
 
@@ -351,7 +362,10 @@ namespace Ubongo
             foreach (GameObject indicator in heightIndicators)
             {
                 if (indicator != null)
-                    Destroy(indicator);
+                {
+                    RemoveCachedRendererColor(indicator);
+                    UnityObjectUtility.SafeDestroy(indicator);
+                }
             }
             heightIndicators.Clear();
         }
@@ -367,7 +381,7 @@ namespace Ubongo
 
             Renderer renderer = block.GetComponent<Renderer>();
             Color blockColor = GetColorForHeight(blockPos.y);
-            renderer.material.color = blockColor;
+            ApplyRendererColor(renderer, blockColor);
 
             Collider collider = block.GetComponent<Collider>();
             collider.enabled = true;
@@ -396,11 +410,11 @@ namespace Ubongo
             ApplyPieceLayer(outline);
 
             Renderer outlineRenderer = outline.GetComponent<Renderer>();
-            outlineRenderer.material = new Material(outlineMaterial);
-            outlineRenderer.material.color = Color.clear;
+            outlineRenderer.sharedMaterial = outlineMaterial;
+            ApplyRendererColor(outlineRenderer, Color.clear);
 
             Collider outlineCollider = outline.GetComponent<Collider>();
-            Destroy(outlineCollider);
+            UnityObjectUtility.SafeDestroy(outlineCollider);
 
             outline.SetActive(false);
 
@@ -548,7 +562,7 @@ namespace Ubongo
                     }
 
                     finalColor.a = alpha;
-                    renderer.material.color = finalColor;
+                    ApplyRendererColor(renderer, finalColor);
                 }
             }
         }
@@ -562,9 +576,11 @@ namespace Ubongo
                 Renderer renderer = outline.GetComponent<Renderer>();
                 if (renderer != null)
                 {
-                    renderer.material.color = color;
+                    ApplyRendererColor(renderer, color);
                 }
             }
+
+            currentOutlineColor = color;
         }
 
         private void SetOutlineVisibility(bool visible)
@@ -609,9 +625,9 @@ namespace Ubongo
                     Renderer renderer = outline.GetComponent<Renderer>();
                     if (renderer != null)
                     {
-                        Color color = renderer.material.color;
+                        Color color = currentOutlineColor;
                         color.a = 0.6f + pulse;
-                        renderer.material.color = color;
+                        ApplyRendererColor(renderer, color);
                     }
                 }
 
@@ -648,10 +664,10 @@ namespace Ubongo
                 indicator.transform.localScale = new Vector3(blockSize * 0.95f, 0.05f, blockSize * 0.95f);
 
                 Renderer renderer = indicator.GetComponent<Renderer>();
-                renderer.material.color = blockPos.y == 1 ? layer2Color : layer1Color;
+                ApplyRendererColor(renderer, blockPos.y == 1 ? layer2Color : layer1Color);
 
                 Collider collider = indicator.GetComponent<Collider>();
-                Destroy(collider);
+                UnityObjectUtility.SafeDestroy(collider);
             }
 
             Vector3 blockLocalPosition = GetBlockLocalPosition(blockPos);
@@ -1044,15 +1060,15 @@ namespace Ubongo
 
                 if (blockPositions[i].y == layer)
                 {
-                    Color highlightColor = renderer.material.color;
+                    Color highlightColor = GetRendererColor(renderer);
                     highlightColor.a = 1f;
-                    renderer.material.color = highlightColor;
+                    ApplyRendererColor(renderer, highlightColor);
                 }
                 else
                 {
-                    Color dimColor = renderer.material.color;
+                    Color dimColor = GetRendererColor(renderer);
                     dimColor.a = 0.4f;
-                    renderer.material.color = dimColor;
+                    ApplyRendererColor(renderer, dimColor);
                 }
             }
         }
@@ -1060,6 +1076,79 @@ namespace Ubongo
         public void ResetLayerHighlight()
         {
             UpdateVisualFeedback();
+        }
+
+        private void ApplyRendererColor(Renderer renderer, Color color)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            if (colorPropertyBlock == null)
+            {
+                colorPropertyBlock = new MaterialPropertyBlock();
+            }
+
+            int colorPropertyId = ResolveColorPropertyId(renderer.sharedMaterial);
+            renderer.GetPropertyBlock(colorPropertyBlock);
+            colorPropertyBlock.SetColor(colorPropertyId, color);
+            renderer.SetPropertyBlock(colorPropertyBlock);
+            rendererColorCache[renderer.GetInstanceID()] = color;
+        }
+
+        private Color GetRendererColor(Renderer renderer)
+        {
+            if (renderer == null)
+            {
+                return Color.clear;
+            }
+
+            if (rendererColorCache.TryGetValue(renderer.GetInstanceID(), out Color cachedColor))
+            {
+                return cachedColor;
+            }
+
+            Material sharedMaterial = renderer.sharedMaterial;
+            int colorPropertyId = ResolveColorPropertyId(sharedMaterial);
+            if (sharedMaterial != null && sharedMaterial.HasProperty(colorPropertyId))
+            {
+                return sharedMaterial.GetColor(colorPropertyId);
+            }
+
+            return Color.white;
+        }
+
+        private void RemoveCachedRendererColor(GameObject target)
+        {
+            if (target == null)
+            {
+                return;
+            }
+
+            Renderer renderer = target.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                rendererColorCache.Remove(renderer.GetInstanceID());
+            }
+        }
+
+        private static int ResolveColorPropertyId(Material material)
+        {
+            if (material != null)
+            {
+                if (material.HasProperty(BaseColorPropertyId))
+                {
+                    return BaseColorPropertyId;
+                }
+
+                if (material.HasProperty(ColorPropertyId))
+                {
+                    return ColorPropertyId;
+                }
+            }
+
+            return ColorPropertyId;
         }
 
         private void ApplyPieceLayer(GameObject target)
