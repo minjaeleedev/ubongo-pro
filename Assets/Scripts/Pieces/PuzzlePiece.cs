@@ -87,6 +87,9 @@ namespace Ubongo
         private Vector3 dragReturnPosition;
         private bool hasDragReturnPosition;
         private Vector3Int previewAnchorOffset;
+        private Coroutine hoverLiftCoroutine;
+        private Vector3 hoverStartPosition;
+        private bool hasHoverStartPosition;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -121,6 +124,12 @@ namespace Ubongo
 
         private void OnDestroy()
         {
+            if (hoverLiftCoroutine != null)
+            {
+                StopCoroutine(hoverLiftCoroutine);
+                hoverLiftCoroutine = null;
+            }
+
             UnsubscribeFromInputEvents();
         }
 
@@ -155,9 +164,17 @@ namespace Ubongo
             if (piece != this) return;
             if (isDragging || isPlaced) return;
 
+            if (hoverLiftCoroutine != null)
+            {
+                StopCoroutine(hoverLiftCoroutine);
+                hoverLiftCoroutine = null;
+            }
+
+            hoverStartPosition = transform.position;
+            hasHoverStartPosition = true;
             isHovering = true;
             SetState(PlacementState.Hovering);
-            StartCoroutine(HoverLift());
+            hoverLiftCoroutine = StartCoroutine(HoverLift());
         }
 
         private void HandleHoverExit(PuzzlePiece piece)
@@ -165,13 +182,37 @@ namespace Ubongo
             if (piece != this) return;
             if (isDragging || isSelected) return;
 
+            if (hoverLiftCoroutine != null)
+            {
+                StopCoroutine(hoverLiftCoroutine);
+                hoverLiftCoroutine = null;
+            }
+
             isHovering = false;
+            if (hasHoverStartPosition)
+            {
+                transform.position = hoverStartPosition;
+            }
+            hasHoverStartPosition = false;
             SetState(PlacementState.Default);
         }
 
         private void HandleSelectStart(PuzzlePiece piece)
         {
             if (piece != this) return;
+
+            if (hoverLiftCoroutine != null)
+            {
+                StopCoroutine(hoverLiftCoroutine);
+                hoverLiftCoroutine = null;
+            }
+
+            if (isHovering && hasHoverStartPosition)
+            {
+                transform.position = hoverStartPosition;
+            }
+            isHovering = false;
+            hasHoverStartPosition = false;
 
             dragReturnPosition = transform.position;
             hasDragReturnPosition = true;
@@ -625,19 +666,33 @@ namespace Ubongo
 
         private IEnumerator HoverLift()
         {
-            Vector3 startScale = transform.localScale;
-            Vector3 targetScale = startScale * 1.05f;
+            if (!hasHoverStartPosition)
+            {
+                hoverLiftCoroutine = null;
+                yield break;
+            }
+
+            Vector3 startPosition = hoverStartPosition;
+            Vector3 targetPosition = startPosition + (Vector3.up * hoverLiftHeight);
             float elapsed = 0f;
             float duration = 0.15f;
 
-            while (elapsed < duration && isHovering && !isDragging)
+            while (elapsed < duration)
             {
+                if (!isHovering || isDragging)
+                {
+                    hoverLiftCoroutine = null;
+                    yield break;
+                }
+
                 elapsed += Time.deltaTime;
-                transform.localScale = Vector3.Lerp(startScale, targetScale, elapsed / duration);
+                float t = Mathf.Clamp01(elapsed / duration);
+                transform.position = Vector3.Lerp(startPosition, targetPosition, t);
                 yield return null;
             }
 
-            transform.localScale = startScale;
+            transform.position = targetPosition;
+            hoverLiftCoroutine = null;
         }
 
         private void RotateWithAnimation(Vector3 axis, float angle)

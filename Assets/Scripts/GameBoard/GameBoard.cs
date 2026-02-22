@@ -739,7 +739,7 @@ namespace Ubongo
             gridLineWidth = Mathf.Max(0.002f, gridLineWidth);
             gridLineYOffset = Mathf.Max(0f, gridLineYOffset);
 
-            if (!Application.isPlaying || grid == null)
+            if (!UnityEngine.Application.isPlaying || grid == null)
             {
                 return;
             }

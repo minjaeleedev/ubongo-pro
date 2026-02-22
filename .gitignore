@@ -32,6 +32,7 @@
 ExportedObj/
 .consulo/
 *.csproj
+omnisharp.json
 *.unityproj
 *.sln
 *.suo

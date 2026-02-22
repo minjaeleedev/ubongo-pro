@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using Ubongo.Systems;
 using Ubongo.Core;
+using Ubongo.Infrastructure.Settings;
 using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
 
 namespace Ubongo
@@ -95,6 +96,7 @@ namespace Ubongo
         private int _consecutiveClears = 0;
         private GameObject solutionPreviewContainer;
         private Coroutine solutionPreviewCoroutine;
+        private ISettingsStore settingsStore;
 
         // Events
         public event Action<GameState> OnGameStateChanged;
@@ -135,6 +137,17 @@ namespace Ubongo
         public int TotalGemPoints => GemSystem?.TotalPoints ?? 0;
         public DifficultyLevelSystem CurrentDifficulty => DifficultySystem?.CurrentDifficulty ?? DifficultyLevelSystem.Easy;
 
+        public void Initialize(ISettingsStore injectedSettingsStore)
+        {
+            if (injectedSettingsStore == null)
+            {
+                return;
+            }
+
+            settingsStore = injectedSettingsStore;
+            LoadSolutionRevealOption();
+        }
+
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -145,6 +158,7 @@ namespace Ubongo
             _instance = this;
             DontDestroyOnLoad(gameObject);
 
+            EnsureSettingsStore();
             LoadSolutionRevealOption();
             InitializeSystemReferences();
         }
@@ -445,7 +459,7 @@ namespace Ubongo
 #if UNITY_EDITOR
             UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+            UnityEngine.Application.Quit();
 #endif
         }
 
@@ -460,8 +474,9 @@ namespace Ubongo
         public void SetShowSolutionOnTimeout(bool enabled)
         {
             showSolutionOnTimeout = enabled;
-            PlayerPrefs.SetInt(RevealSolutionOptionKey, enabled ? 1 : 0);
-            PlayerPrefs.Save();
+            ISettingsStore store = EnsureSettingsStore();
+            store.SetBool(RevealSolutionOptionKey, enabled);
+            store.Save();
         }
 
         /// <summary>
@@ -698,8 +713,19 @@ namespace Ubongo
 
         private void LoadSolutionRevealOption()
         {
-            int defaultValue = showSolutionOnTimeout ? 1 : 0;
-            showSolutionOnTimeout = PlayerPrefs.GetInt(RevealSolutionOptionKey, defaultValue) == 1;
+            ISettingsStore store = EnsureSettingsStore();
+            showSolutionOnTimeout = store.GetBool(RevealSolutionOptionKey, showSolutionOnTimeout);
+        }
+
+        private ISettingsStore EnsureSettingsStore()
+        {
+            if (settingsStore != null)
+            {
+                return settingsStore;
+            }
+
+            settingsStore = new PlayerPrefsSettingsStore();
+            return settingsStore;
         }
 
         private void TryShowSolutionOnTimeout(RoundResult result)
