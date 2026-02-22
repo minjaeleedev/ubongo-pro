@@ -1,0 +1,19 @@
+{
+    "name": "Ubongo.Tests.PlayMode",
+    "rootNamespace": "Ubongo.Tests.PlayMode",
+    "references": [
+        "GUID:f895984e3ffd24808b74960551e22d44"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

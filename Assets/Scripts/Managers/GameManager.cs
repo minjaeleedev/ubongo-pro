@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using Ubongo.Systems;
+using Ubongo.Core;
 using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
 
 namespace Ubongo
@@ -41,6 +42,9 @@ namespace Ubongo
     /// </summary>
     public class GameManager : MonoBehaviour
     {
+        private static readonly Quaternion IsometricRotation = Quaternion.Euler(35.264f, 45f, 0f);
+        private const string RevealSolutionOptionKey = "RevealSolutionOnTimeout";
+
         private static GameManager _instance;
         public static GameManager Instance
         {
@@ -62,6 +66,21 @@ namespace Ubongo
         [Header("Game Settings")]
         [SerializeField] private GameMode currentMode = GameMode.Classic;
         [SerializeField] private bool enableHints = false;
+        [SerializeField] private bool autoStartInEditor = false;
+        [SerializeField] private bool showSolutionOnTimeout = false;
+        [SerializeField, Min(1f)] private float solutionRevealSeconds = 5f;
+
+        [Header("Solution Preview")]
+        [SerializeField] private Material solutionPreviewMaterial;
+        [SerializeField] private float solutionBlockHeight = 0.45f;
+        [SerializeField] private float solutionLayerStepY = 0.6f;
+        [SerializeField] private float solutionBlockScaleRatio = 0.88f;
+
+        [Header("Camera Settings")]
+        [SerializeField] private float defaultCameraDistance = 12f;
+        [SerializeField] private float minOrthographicSize = 5f;
+        [SerializeField] private float maxOrthographicSize = 16f;
+        [SerializeField] private float viewPadding = 1.25f;
 
         [Header("References")]
         [SerializeField] private GemSystem gemSystem;
@@ -74,6 +93,8 @@ namespace Ubongo
         private GameState _currentState = GameState.Menu;
         private int _bonusScore = 0;
         private int _consecutiveClears = 0;
+        private GameObject solutionPreviewContainer;
+        private Coroutine solutionPreviewCoroutine;
 
         // Events
         public event Action<GameState> OnGameStateChanged;
@@ -124,14 +145,35 @@ namespace Ubongo
             _instance = this;
             DontDestroyOnLoad(gameObject);
 
+            LoadSolutionRevealOption();
             InitializeSystemReferences();
         }
 
         private void Start()
         {
+            SetupCamera();
             SubscribeToEvents();
-            // UI가 없는 동안 자동으로 게임 시작
-            StartGame(DifficultyLevelSystem.Easy);
+#if UNITY_EDITOR
+            if (autoStartInEditor)
+            {
+                StartGame(DifficultyLevelSystem.Easy);
+            }
+#endif
+        }
+
+        private void SetupCamera()
+        {
+            Camera cam = Camera.main;
+            if (cam == null) return;
+
+            cam.transform.rotation = IsometricRotation;
+            cam.transform.position = new Vector3(-8f, 8f, -8f);
+            cam.orthographic = true;
+            cam.orthographicSize = minOrthographicSize;
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = 200f;
+            cam.backgroundColor = new Color(0.1f, 0.1f, 0.15f);
+            cam.clearFlags = CameraClearFlags.SolidColor;
         }
 
         private void InitializeSystemReferences()
@@ -415,6 +457,13 @@ namespace Ubongo
             enableHints = enabled;
         }
 
+        public void SetShowSolutionOnTimeout(bool enabled)
+        {
+            showSolutionOnTimeout = enabled;
+            PlayerPrefs.SetInt(RevealSolutionOptionKey, enabled ? 1 : 0);
+            PlayerPrefs.Save();
+        }
+
         /// <summary>
         /// 게임 결과 요약 조회
         /// </summary>
@@ -451,10 +500,12 @@ namespace Ubongo
 
         private void HandleRoundStarted(int round)
         {
+            ClearSolutionPreview();
+
             // 퍼즐 생성
             if (levelGenerator != null)
             {
-                var levelData = levelGenerator.GetLevelData(round);
+                var levelData = levelGenerator.GenerateLevelData(round);
 
                 if (gameBoard != null)
                 {
@@ -462,10 +513,89 @@ namespace Ubongo
                     gameBoard.SetTargetArea(levelData.TargetArea);
                 }
 
-                levelGenerator.GenerateLevel(round);
+                ConfigureGameplayView();
+                levelGenerator.SpawnFromLevelData(levelData);
+                ConfigureGameplayView();
             }
 
             ChangeState(GameState.Playing);
+        }
+
+        private void ConfigureGameplayView()
+        {
+            Camera cam = Camera.main;
+            if (cam == null || gameBoard == null)
+            {
+                return;
+            }
+
+            Bounds focusBounds = gameBoard.GetWorldBounds();
+            if (levelGenerator != null && levelGenerator.TryGetSpawnedPiecesBounds(out Bounds pieceBounds))
+            {
+                focusBounds.Encapsulate(pieceBounds);
+            }
+            Vector3 focusCenter = focusBounds.center;
+            Vector3 cameraOffset = new Vector3(-1f, 1f, -1f).normalized * defaultCameraDistance;
+
+            cam.transform.rotation = IsometricRotation;
+            cam.transform.position = focusCenter + cameraOffset;
+            cam.transform.LookAt(focusCenter);
+            cam.orthographic = true;
+
+            float targetSize = CalculateOrthographicSizeFromBounds(
+                focusBounds,
+                cam.transform.rotation,
+                cam.aspect,
+                viewPadding
+            );
+
+            cam.orthographicSize = Mathf.Clamp(targetSize, minOrthographicSize, maxOrthographicSize);
+        }
+
+        public static float CalculateOrthographicSizeFromBounds(
+            Bounds bounds,
+            Quaternion cameraRotation,
+            float aspect,
+            float padding)
+        {
+            Vector3[] corners = GetBoundsCorners(bounds);
+            float minX = float.MaxValue;
+            float maxX = float.MinValue;
+            float minY = float.MaxValue;
+            float maxY = float.MinValue;
+            Quaternion inverseRotation = Quaternion.Inverse(cameraRotation);
+
+            foreach (Vector3 corner in corners)
+            {
+                Vector3 viewSpace = inverseRotation * corner;
+                minX = Mathf.Min(minX, viewSpace.x);
+                maxX = Mathf.Max(maxX, viewSpace.x);
+                minY = Mathf.Min(minY, viewSpace.y);
+                maxY = Mathf.Max(maxY, viewSpace.y);
+            }
+
+            float verticalHalfSize = (maxY - minY) * 0.5f + padding;
+            float horizontalHalfSize = ((maxX - minX) * 0.5f / Mathf.Max(0.01f, aspect)) + padding;
+
+            return Mathf.Max(verticalHalfSize, horizontalHalfSize);
+        }
+
+        private static Vector3[] GetBoundsCorners(Bounds bounds)
+        {
+            Vector3 center = bounds.center;
+            Vector3 extents = bounds.extents;
+
+            return new[]
+            {
+                center + new Vector3(-extents.x, -extents.y, -extents.z),
+                center + new Vector3(-extents.x, -extents.y, extents.z),
+                center + new Vector3(-extents.x, extents.y, -extents.z),
+                center + new Vector3(-extents.x, extents.y, extents.z),
+                center + new Vector3(extents.x, -extents.y, -extents.z),
+                center + new Vector3(extents.x, -extents.y, extents.z),
+                center + new Vector3(extents.x, extents.y, -extents.z),
+                center + new Vector3(extents.x, extents.y, extents.z)
+            };
         }
 
         private void HandleRoundCompleted(RoundResult result)
@@ -485,6 +615,8 @@ namespace Ubongo
             _consecutiveClears = 0;
             DifficultySystem?.RecordRoundFailure();
             ChangeState(GameState.RoundFailed);
+
+            TryShowSolutionOnTimeout(result);
         }
 
         private void HandleGameCompleted(System.Collections.Generic.List<RoundResult> results)
@@ -561,6 +693,113 @@ namespace Ubongo
         private void OnDestroy()
         {
             UnsubscribeFromEvents();
+            ClearSolutionPreview();
+        }
+
+        private void LoadSolutionRevealOption()
+        {
+            int defaultValue = showSolutionOnTimeout ? 1 : 0;
+            showSolutionOnTimeout = PlayerPrefs.GetInt(RevealSolutionOptionKey, defaultValue) == 1;
+        }
+
+        private void TryShowSolutionOnTimeout(RoundResult result)
+        {
+            if (!showSolutionOnTimeout || levelGenerator == null || gameBoard == null)
+            {
+                return;
+            }
+
+            if (result.Completed || result.TimeSpent < (result.TimeLimit - 0.01f))
+            {
+                return;
+            }
+
+            LevelData levelData = levelGenerator.CurrentLevelData;
+            if (levelData == null || levelData.Pieces == null || levelData.SolutionPlacements == null || levelData.SolutionPlacements.Count == 0)
+            {
+                return;
+            }
+
+            BuildSolutionPreview(levelData);
+            RoundManager?.SetNextTransitionDelayOverride(solutionRevealSeconds);
+
+            if (solutionPreviewCoroutine != null)
+            {
+                StopCoroutine(solutionPreviewCoroutine);
+            }
+            solutionPreviewCoroutine = StartCoroutine(ClearSolutionPreviewAfterDelay(solutionRevealSeconds));
+        }
+
+        private void BuildSolutionPreview(LevelData levelData)
+        {
+            ClearSolutionPreview();
+            solutionPreviewContainer = new GameObject("SolutionPreview");
+            solutionPreviewContainer.transform.SetParent(gameBoard.transform, false);
+
+            float blockScaleXZ = Mathf.Max(0.1f, gameBoard.CellSize * solutionBlockScaleRatio);
+            float blockHalfHeight = solutionBlockHeight * 0.5f;
+
+            for (int i = 0; i < levelData.SolutionPlacements.Count; i++)
+            {
+                SolutionPlacement placement = levelData.SolutionPlacements[i];
+                if (placement.PieceIndex < 0 || placement.PieceIndex >= levelData.Pieces.Count)
+                {
+                    continue;
+                }
+
+                PieceDefinition piece = levelData.Pieces[placement.PieceIndex];
+                Vector3Int[] rotatedBlocks = RotationUtil.RotatePiece(piece.Blocks, placement.RotationIndex);
+
+                foreach (Vector3Int block in rotatedBlocks)
+                {
+                    Vector3Int cell = placement.Position + block;
+                    Vector3 world = gameBoard.GridToWorld(cell.x, 0, cell.z);
+                    world.y = blockHalfHeight + (cell.y * solutionLayerStepY);
+
+                    GameObject ghostBlock = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    ghostBlock.name = $"Solution_{piece.Name}_{cell.x}_{cell.y}_{cell.z}";
+                    ghostBlock.transform.SetParent(solutionPreviewContainer.transform, true);
+                    ghostBlock.transform.position = world;
+                    ghostBlock.transform.localScale = new Vector3(blockScaleXZ, solutionBlockHeight, blockScaleXZ);
+
+                    Renderer renderer = ghostBlock.GetComponent<Renderer>();
+                    if (renderer != null)
+                    {
+                        if (solutionPreviewMaterial != null)
+                        {
+                            renderer.material = new Material(solutionPreviewMaterial);
+                        }
+                        renderer.material.color = piece.DefaultColor * 0.9f;
+                    }
+
+                    Collider blockCollider = ghostBlock.GetComponent<Collider>();
+                    if (blockCollider != null)
+                    {
+                        Destroy(blockCollider);
+                    }
+                }
+            }
+        }
+
+        private IEnumerator ClearSolutionPreviewAfterDelay(float delaySeconds)
+        {
+            yield return new WaitForSeconds(Mathf.Max(0.1f, delaySeconds));
+            ClearSolutionPreview();
+        }
+
+        private void ClearSolutionPreview()
+        {
+            if (solutionPreviewCoroutine != null)
+            {
+                StopCoroutine(solutionPreviewCoroutine);
+                solutionPreviewCoroutine = null;
+            }
+
+            if (solutionPreviewContainer != null)
+            {
+                Destroy(solutionPreviewContainer);
+                solutionPreviewContainer = null;
+            }
         }
     }
 

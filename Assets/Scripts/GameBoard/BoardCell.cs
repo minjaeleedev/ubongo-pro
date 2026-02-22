@@ -4,16 +4,19 @@ namespace Ubongo
 {
     public class BoardCell : MonoBehaviour
     {
+        private const string VisualChildName = "Visual";
+
         private int x, y, z;
-        private GameBoard board;
         private bool isOccupied = false;
         private bool isTarget = false;
+        private bool isHighlighted = false;
+        private bool isHighlightValid = true;
         private PuzzlePiece occupyingPiece;
         private Renderer cellRenderer;
-        private Material originalMaterial;
         
         [Header("Visual Feedback")]
-        [SerializeField] private Color targetColor = new Color(0.2f, 0.8f, 0.2f, 0.5f);
+        [SerializeField] private Color baseColor = new Color(0.34f, 0.4f, 0.5f, 0.5f);
+        [SerializeField] private Color targetColor = new Color(0.45f, 0.54f, 0.66f, 0.65f);
         [SerializeField] private Color occupiedColor = new Color(0.5f, 0.5f, 0.5f, 0.8f);
         [SerializeField] private Color highlightValidColor = new Color(0.2f, 1f, 0.2f, 0.6f);
         [SerializeField] private Color highlightInvalidColor = new Color(1f, 0.2f, 0.2f, 0.6f);
@@ -24,19 +27,37 @@ namespace Ubongo
         public bool IsOccupied => isOccupied;
         public bool IsTarget => isTarget;
         public PuzzlePiece OccupyingPiece => occupyingPiece;
+        public Renderer VisualRenderer => cellRenderer;
         
-        public void Initialize(int gridX, int gridY, int gridZ, GameBoard gameBoard)
+        public void Initialize(int gridX, int gridY, int gridZ, GameBoard _)
         {
             x = gridX;
             y = gridY;
             z = gridZ;
-            board = gameBoard;
             
-            cellRenderer = GetComponent<Renderer>();
-            if (cellRenderer != null)
+            cellRenderer = ResolveRenderer();
+            UpdateVisual();
+        }
+
+        private Renderer ResolveRenderer()
+        {
+            Transform visualTransform = transform.Find(VisualChildName);
+            if (visualTransform != null)
             {
-                originalMaterial = cellRenderer.material;
+                Renderer visualChildRenderer = visualTransform.GetComponent<Renderer>();
+                if (visualChildRenderer != null)
+                {
+                    return visualChildRenderer;
+                }
             }
+
+            Renderer rootRenderer = GetComponent<Renderer>();
+            if (rootRenderer != null)
+            {
+                return rootRenderer;
+            }
+
+            return GetComponentInChildren<Renderer>();
         }
         
         public void SetAsTarget(bool target)
@@ -49,22 +70,36 @@ namespace Ubongo
         {
             isOccupied = occupied;
             occupyingPiece = piece;
+            if (occupied)
+            {
+                isHighlighted = false;
+            }
             UpdateVisual();
         }
         
-        public void SetHighlight(bool valid)
+        public void SetHighlight(bool highlighted, bool valid)
         {
-            if (cellRenderer != null)
-            {
-                Color highlightColor = valid ? highlightValidColor : highlightInvalidColor;
-                cellRenderer.material.color = highlightColor;
-            }
+            isHighlighted = highlighted;
+            isHighlightValid = valid;
+            UpdateVisual();
         }
         
         private void UpdateVisual()
         {
             if (cellRenderer == null) return;
-            
+            if (y > 0)
+            {
+                cellRenderer.enabled = false;
+                return;
+            }
+
+            if (isHighlighted)
+            {
+                cellRenderer.material.color = isHighlightValid ? highlightValidColor : highlightInvalidColor;
+                cellRenderer.enabled = true;
+                return;
+            }
+
             if (isOccupied)
             {
                 cellRenderer.material.color = occupiedColor;
@@ -77,28 +112,37 @@ namespace Ubongo
             }
             else
             {
-                cellRenderer.material.color = Color.white * 0.3f;
+                cellRenderer.material.color = baseColor;
                 cellRenderer.enabled = true;
             }
         }
         
-        private void OnTriggerEnter(Collider other)
+        private void OnTriggerEnter(Collider _)
         {
-            PuzzlePiece piece = other.GetComponentInParent<PuzzlePiece>();
-            if (piece != null && piece.IsDragging)
-            {
-                Vector3Int gridPos = board.WorldToGrid(piece.transform.position);
-                board.HighlightValidPlacement(gridPos, piece);
-            }
+            // Piece preview/highlight is updated centrally from PuzzlePiece.UpdatePlacementPreview.
+            // Trigger-based updates can race and show stale green highlights.
         }
         
-        private void OnTriggerExit(Collider other)
+        private void OnTriggerExit(Collider _)
         {
-            PuzzlePiece piece = other.GetComponentInParent<PuzzlePiece>();
-            if (piece != null && piece.IsDragging)
+            // Intentionally no-op. PuzzlePiece handles highlight clearing on release.
+        }
+
+        private void OnValidate()
+        {
+            float distance = ColorDistance(targetColor, highlightValidColor);
+            if (distance < 0.35f)
             {
-                board.ClearHighlights();
+                Debug.LogWarning($"[{nameof(BoardCell)}] targetColor is too close to highlightValidColor (distance: {distance:0.00}).");
             }
+        }
+
+        private static float ColorDistance(Color a, Color b)
+        {
+            float dr = a.r - b.r;
+            float dg = a.g - b.g;
+            float db = a.b - b.b;
+            return Mathf.Sqrt((dr * dr) + (dg * dg) + (db * db));
         }
     }
 }

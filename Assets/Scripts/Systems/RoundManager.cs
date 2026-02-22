@@ -101,6 +101,7 @@ namespace Ubongo.Systems
         private bool _isSecondChanceRound;
         private int _playersCompletedCount;
         private int _totalPlayersInRound;
+        private float? _nextTransitionDelayOverride;
 
         // Events
         public event Action<int, RoundConfig> OnRoundStarting;
@@ -164,6 +165,7 @@ namespace Ubongo.Systems
             _currentRound = 0;
             _roundResults = new List<RoundResult>();
             _currentState = RoundState.NotStarted;
+            _nextTransitionDelayOverride = null;
 
             OnGameReset?.Invoke();
 
@@ -462,7 +464,13 @@ namespace Ubongo.Systems
         {
             _currentState = RoundState.Transitioning;
 
-            yield return new WaitForSeconds(transitionDelay);
+            float delay = _nextTransitionDelayOverride ?? transitionDelay;
+            _nextTransitionDelayOverride = null;
+
+            if (delay > 0f)
+            {
+                yield return new WaitForSeconds(delay);
+            }
 
             if (_currentRound >= totalRounds)
             {
@@ -521,6 +529,14 @@ namespace Ubongo.Systems
             {
                 Time.timeScale = 1f;
             }
+        }
+
+        /// <summary>
+        /// Overrides transition delay once for the next round transition.
+        /// </summary>
+        public void SetNextTransitionDelayOverride(float delaySeconds)
+        {
+            _nextTransitionDelayOverride = Mathf.Max(0f, delaySeconds);
         }
 
         /// <summary>

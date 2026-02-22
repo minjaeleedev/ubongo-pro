@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.InputSystem;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -19,12 +18,14 @@ namespace Ubongo
 
     public class PuzzlePiece : MonoBehaviour
     {
+        private const string PieceLayerName = "Piece";
+
         [Header("Piece Configuration")]
         [SerializeField] private List<Vector3Int> blockPositions = new List<Vector3Int>();
         [SerializeField] private Color pieceColor = Color.blue;
 
         [Header("Drag Settings")]
-        [SerializeField] private float dragHeight = 2f;
+        [SerializeField] private float dragHeight = 0.5f;
         [SerializeField] private LayerMask boardLayer;
 
         [Header("Visual Feedback Colors")]
@@ -60,23 +61,32 @@ namespace Ubongo
         [SerializeField] private Color layer1Color = new Color(0.3f, 0.8f, 0.3f, 0.5f);
         [SerializeField] private Color layer2Color = new Color(0.3f, 0.5f, 0.8f, 0.5f);
 
+        [Header("Block Visual Profile")]
+        [SerializeField] private float blockVisualHeight = 0.8f;
+        [SerializeField] private float layerStepY = 0.8f;
+
         private bool isDragging = false;
         private bool isPlaced = false;
         private bool isSelected = false;
         private bool isHovering = false;
         private PlacementState currentState = PlacementState.Default;
         private Vector3 originalPosition;
-        private Quaternion originalRotation;
         private GameBoard gameBoard;
-        private Camera mainCamera;
-        private Vector3 dragOffset;
         private List<GameObject> blockObjects = new List<GameObject>();
         private List<GameObject> outlineObjects = new List<GameObject>();
         private List<GameObject> heightIndicators = new List<GameObject>();
         private Coroutine pulseCoroutine;
         private Coroutine shakeCoroutine;
-        private Vector3 lastValidPosition;
+        private GameBoard previewBoard;
+        private Vector3Int previewGridPosition;
+        private bool previewCanPlace;
+        private bool hasPlacementPreview;
         private bool subscribedToInput = false;
+        private int pieceLayerIndex = -1;
+        private float blockGridStep = 1f;
+        private Vector3 dragReturnPosition;
+        private bool hasDragReturnPosition;
+        private Vector3Int previewAnchorOffset;
 
         public bool IsDragging => isDragging;
         public bool IsPlaced => isPlaced;
@@ -88,12 +98,21 @@ namespace Ubongo
         public event Action<PuzzlePiece> OnPieceDeselected;
         public event Action<PuzzlePiece, bool> OnPlacementAttempt;
 
+        private void Awake()
+        {
+            pieceLayerIndex = LayerMask.NameToLayer(PieceLayerName);
+            if (pieceLayerIndex < 0)
+            {
+                Debug.LogWarning($"[{nameof(PuzzlePiece)}] Layer '{PieceLayerName}' not found. Piece keeps default layer.");
+            }
+            ApplyPieceLayer(gameObject);
+        }
+
         private void Start()
         {
-            mainCamera = Camera.main;
             gameBoard = FindFirstObjectByType<GameBoard>();
             originalPosition = transform.position;
-            originalRotation = transform.rotation;
+            blockGridStep = ResolveGridStep();
 
             CreateBlockVisuals();
             SetState(PlacementState.Default);
@@ -154,6 +173,9 @@ namespace Ubongo
         {
             if (piece != this) return;
 
+            dragReturnPosition = transform.position;
+            hasDragReturnPosition = true;
+
             if (isPlaced)
             {
                 gameBoard.RemovePiece(this);
@@ -166,16 +188,6 @@ namespace Ubongo
 
             PlaySound(pickupSound);
             OnPieceSelected?.Invoke(this);
-
-            if (InputManager.Instance != null)
-            {
-                Ray ray = InputManager.Instance.GetPointerRay();
-                if (Physics.Raycast(ray, out RaycastHit hit))
-                {
-                    dragOffset = transform.position - hit.point;
-                    dragOffset.y = 0;
-                }
-            }
         }
 
         private void HandleDrag(PuzzlePiece piece, Vector3 newPosition)
@@ -183,7 +195,9 @@ namespace Ubongo
             if (piece != this) return;
             if (!isDragging) return;
 
-            transform.position = newPosition;
+            Vector3 adjustedPosition = newPosition;
+            adjustedPosition.y += GetPlacementLiftFromOffset(GetPlacementAnchorOffset());
+            transform.position = adjustedPosition;
         }
 
         private void HandleSelectEnd(PuzzlePiece piece)
@@ -192,39 +206,24 @@ namespace Ubongo
 
             isDragging = false;
             ClearHeightIndicators();
+            RefreshPlacementPreviewCache();
 
-            if (InputManager.Instance != null && InputManager.Instance.TryGetBoardHit(out RaycastHit hit))
+            if (hasPlacementPreview && previewBoard != null && previewCanPlace)
             {
-                GameBoard board = hit.collider.GetComponentInParent<GameBoard>();
-                if (board != null)
-                {
-                    Vector3Int gridPos = board.WorldToGrid(transform.position);
-
-                    if (board.CanPlacePiece(this, gridPos))
-                    {
-                        StartCoroutine(SnapToPosition(board.GridToWorld(gridPos.x, gridPos.y, gridPos.z)));
-                        board.PlacePiece(this, gridPos);
-                        PlaySound(validPlaceSound);
-                        OnPlacementAttempt?.Invoke(this, true);
-                    }
-                    else
-                    {
-                        StartCoroutine(ShakeAndReturn());
-                        PlaySound(invalidPlaceSound);
-                        OnPlacementAttempt?.Invoke(this, false);
-                    }
-                }
-                else
-                {
-                    ReturnToOriginalPosition();
-                }
+                Vector3 targetPosition = GetSnappedRootWorldPosition(previewBoard, previewGridPosition, previewAnchorOffset);
+                StartCoroutine(SnapToPosition(targetPosition));
+                previewBoard.PlacePiece(this, previewGridPosition);
+                PlaySound(validPlaceSound);
+                OnPlacementAttempt?.Invoke(this, true);
             }
             else
             {
-                ReturnToOriginalPosition();
+                StartCoroutine(ShakeAndReturn());
+                PlaySound(invalidPlaceSound);
+                OnPlacementAttempt?.Invoke(this, false);
             }
 
-            gameBoard.ClearHighlights();
+            ClearBoardHighlights();
         }
 
         private void HandleRotate(Vector3 axis, float angle)
@@ -241,6 +240,15 @@ namespace Ubongo
             if (!subscribedToInput && InputManager.Instance != null)
             {
                 SubscribeToInputEvents();
+            }
+
+            if (gameBoard == null)
+            {
+                gameBoard = FindFirstObjectByType<GameBoard>();
+                if (gameBoard != null)
+                {
+                    SyncGridStepWithBoard();
+                }
             }
 
             if (isDragging)
@@ -311,8 +319,10 @@ namespace Ubongo
         {
             GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
             block.transform.parent = transform;
-            block.transform.localPosition = blockPos;
-            block.transform.localScale = Vector3.one * 0.95f;
+            block.transform.localPosition = GetBlockLocalPosition(blockPos);
+            float blockSize = ResolveBlockVisualSize();
+            block.transform.localScale = new Vector3(blockSize, blockVisualHeight, blockSize);
+            ApplyPieceLayer(block);
 
             Renderer renderer = block.GetComponent<Renderer>();
             Color blockColor = GetColorForHeight(blockPos.y);
@@ -342,6 +352,7 @@ namespace Ubongo
             outline.transform.parent = block.transform;
             outline.transform.localPosition = Vector3.zero;
             outline.transform.localScale = Vector3.one * (1f + outlineWidth);
+            ApplyPieceLayer(outline);
 
             Renderer outlineRenderer = outline.GetComponent<Renderer>();
             outlineRenderer.material = new Material(outlineMaterial);
@@ -400,17 +411,26 @@ namespace Ubongo
         {
             if (blockPositions.Count == 0) return;
 
-            Vector3 min = blockPositions[0];
-            Vector3 max = blockPositions[0];
+            float blockHalfSize = ResolveBlockVisualSize() * 0.5f;
+            Vector3 min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            Vector3 max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
 
             foreach (Vector3Int pos in blockPositions)
             {
-                min = Vector3.Min(min, pos);
-                max = Vector3.Max(max, pos);
+                Vector3 center = GetBlockLocalPosition(pos);
+                min = Vector3.Min(min, center - new Vector3(blockHalfSize, blockVisualHeight * 0.5f, blockHalfSize));
+                max = Vector3.Max(max, center + new Vector3(blockHalfSize, blockVisualHeight * 0.5f, blockHalfSize));
+
+                // Keep collider sufficiently thick to remain easy to pick.
+                max.y = Mathf.Max(max.y, center.y + Mathf.Max(0.2f, blockVisualHeight * 0.5f));
             }
 
             collider.center = (min + max) * 0.5f;
-            collider.size = max - min + Vector3.one;
+            collider.size = new Vector3(
+                Mathf.Max(0.2f, max.x - min.x),
+                Mathf.Max(0.2f, max.y - min.y),
+                Mathf.Max(0.2f, max.z - min.z)
+            );
         }
 
         private void SetState(PlacementState newState)
@@ -583,7 +603,8 @@ namespace Ubongo
             {
                 indicator = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 indicator.transform.parent = transform;
-                indicator.transform.localScale = new Vector3(0.9f, 0.05f, 0.9f);
+                float blockSize = ResolveBlockVisualSize();
+                indicator.transform.localScale = new Vector3(blockSize * 0.95f, 0.05f, blockSize * 0.95f);
 
                 Renderer renderer = indicator.GetComponent<Renderer>();
                 renderer.material.color = blockPos.y == 1 ? layer2Color : layer1Color;
@@ -592,23 +613,31 @@ namespace Ubongo
                 Destroy(collider);
             }
 
-            indicator.transform.localPosition = new Vector3(blockPos.x, blockPos.y - 0.5f, blockPos.z);
+            Vector3 blockLocalPosition = GetBlockLocalPosition(blockPos);
+            indicator.transform.localPosition = new Vector3(
+                blockLocalPosition.x,
+                blockLocalPosition.y - (blockVisualHeight * 0.55f),
+                blockLocalPosition.z
+            );
+            ApplyPieceLayer(indicator);
             heightIndicators.Add(indicator);
         }
 
         private IEnumerator HoverLift()
         {
-            Vector3 startPos = transform.position;
-            Vector3 targetPos = startPos + Vector3.up * hoverLiftHeight;
+            Vector3 startScale = transform.localScale;
+            Vector3 targetScale = startScale * 1.05f;
             float elapsed = 0f;
             float duration = 0.15f;
 
             while (elapsed < duration && isHovering && !isDragging)
             {
                 elapsed += Time.deltaTime;
-                transform.position = Vector3.Lerp(startPos, targetPos, elapsed / duration);
+                transform.localScale = Vector3.Lerp(startScale, targetScale, elapsed / duration);
                 yield return null;
             }
+
+            transform.localScale = startScale;
         }
 
         private void RotateWithAnimation(Vector3 axis, float angle)
@@ -640,28 +669,28 @@ namespace Ubongo
 
         private void UpdatePlacementPreview()
         {
-            if (gameBoard == null) return;
+            RefreshPlacementPreviewCache();
+            if (!hasPlacementPreview || previewBoard == null)
+            {
+                return;
+            }
 
-            Vector3Int gridPos = gameBoard.WorldToGrid(transform.position);
-            bool canPlace = gameBoard.CanPlacePiece(this, gridPos);
-
-            if (canPlace)
+            if (previewCanPlace)
             {
                 if (currentState != PlacementState.ValidPlacement)
                 {
                     SetState(PlacementState.ValidPlacement);
                 }
-                lastValidPosition = gameBoard.GridToWorld(gridPos.x, gridPos.y, gridPos.z);
             }
             else
             {
-                if (currentState != PlacementState.InvalidPlacement && currentState != PlacementState.Dragging)
+                if (currentState != PlacementState.InvalidPlacement)
                 {
                     SetState(PlacementState.InvalidPlacement);
                 }
             }
 
-            gameBoard.HighlightValidPlacement(gridPos, this);
+            previewBoard.HighlightValidPlacement(previewGridPosition, this);
         }
 
         private IEnumerator SnapToPosition(Vector3 targetPosition)
@@ -702,18 +731,19 @@ namespace Ubongo
                 yield return null;
             }
 
-            ReturnToOriginalPosition();
+            ReturnToDragStartPosition();
         }
 
-        private void ReturnToOriginalPosition()
+        private void ReturnToDragStartPosition()
         {
-            StartCoroutine(AnimateReturnToOriginal());
+            StartCoroutine(AnimateReturnToDragStart());
         }
 
-        private IEnumerator AnimateReturnToOriginal()
+        private IEnumerator AnimateReturnToDragStart()
         {
             Vector3 startPosition = transform.position;
-            Quaternion startRotation = transform.rotation;
+            Quaternion lockedRotation = transform.rotation;
+            Vector3 returnPosition = hasDragReturnPosition ? dragReturnPosition : originalPosition;
             float elapsed = 0f;
             float duration = 0.3f;
 
@@ -722,13 +752,13 @@ namespace Ubongo
                 elapsed += Time.deltaTime;
                 float t = elapsed / duration;
                 float smoothT = t * t * (3f - 2f * t);
-                transform.position = Vector3.Lerp(startPosition, originalPosition, smoothT);
-                transform.rotation = Quaternion.Slerp(startRotation, originalRotation, smoothT);
+                transform.position = Vector3.Lerp(startPosition, returnPosition, smoothT);
+                transform.rotation = lockedRotation;
                 yield return null;
             }
 
-            transform.position = originalPosition;
-            transform.rotation = originalRotation;
+            transform.position = returnPosition;
+            transform.rotation = lockedRotation;
             isPlaced = false;
             isSelected = false;
             SetState(PlacementState.Default);
@@ -745,20 +775,16 @@ namespace Ubongo
 
         public List<Vector3Int> GetBlockPositions()
         {
-            List<Vector3Int> rotatedPositions = new List<Vector3Int>();
+            List<Vector3Int> rawRotated = GetRawRotatedBlockPositions();
+            Vector3Int minOffset = GetMinOffset(rawRotated);
+            List<Vector3Int> normalized = new List<Vector3Int>(rawRotated.Count);
 
-            foreach (Vector3Int originalPos in blockPositions)
+            foreach (Vector3Int raw in rawRotated)
             {
-                Vector3 rotated = transform.rotation * originalPos;
-                Vector3Int roundedPos = new Vector3Int(
-                    Mathf.RoundToInt(rotated.x),
-                    Mathf.RoundToInt(rotated.y),
-                    Mathf.RoundToInt(rotated.z)
-                );
-                rotatedPositions.Add(roundedPos);
+                normalized.Add(raw - minOffset);
             }
 
-            return rotatedPositions;
+            return normalized;
         }
 
         public void SetPlaced(bool placed)
@@ -785,6 +811,153 @@ namespace Ubongo
         {
             blockPositions = new List<Vector3Int>(positions);
             CreateBlockVisuals();
+        }
+
+        private float GetBaseLayerCenterY()
+        {
+            return blockVisualHeight * 0.5f;
+        }
+
+        private Vector3 GetBlockLocalPosition(Vector3Int blockPos)
+        {
+            return new Vector3(
+                blockPos.x * blockGridStep,
+                GetBaseLayerCenterY() + (blockPos.y * layerStepY),
+                blockPos.z * blockGridStep
+            );
+        }
+
+        private void RefreshPlacementPreviewCache()
+        {
+            if (gameBoard == null)
+            {
+                gameBoard = FindFirstObjectByType<GameBoard>();
+            }
+
+            if (gameBoard == null)
+            {
+                hasPlacementPreview = false;
+                previewBoard = null;
+                previewCanPlace = false;
+                return;
+            }
+
+            SyncGridStepWithBoard();
+
+            Vector3Int rootGridPos = gameBoard.WorldToGrid(transform.position);
+            previewAnchorOffset = GetPlacementAnchorOffset();
+            previewBoard = gameBoard;
+            previewGridPosition = new Vector3Int(
+                rootGridPos.x + previewAnchorOffset.x,
+                0,
+                rootGridPos.z + previewAnchorOffset.z
+            );
+            previewCanPlace = gameBoard.CanPlacePiece(this, previewGridPosition);
+            hasPlacementPreview = true;
+        }
+
+        private float ResolveGridStep()
+        {
+            if (gameBoard == null)
+            {
+                return 1f;
+            }
+
+            return Mathf.Max(0.01f, gameBoard.GridStep);
+        }
+
+        private float ResolveBlockVisualSize()
+        {
+            if (gameBoard == null)
+            {
+                return 0.92f;
+            }
+
+            return Mathf.Max(0.1f, gameBoard.CellSize * gameBoard.BoardFootprintRatio);
+        }
+
+        private void SyncGridStepWithBoard()
+        {
+            float resolvedStep = ResolveGridStep();
+            if (Mathf.Abs(blockGridStep - resolvedStep) <= 0.001f)
+            {
+                return;
+            }
+
+            blockGridStep = resolvedStep;
+            CreateBlockVisuals();
+        }
+
+        private List<Vector3Int> GetRawRotatedBlockPositions()
+        {
+            List<Vector3Int> rotatedPositions = new List<Vector3Int>(blockPositions.Count);
+
+            foreach (Vector3Int originalPos in blockPositions)
+            {
+                Vector3 rotated = transform.rotation * originalPos;
+                rotatedPositions.Add(new Vector3Int(
+                    Mathf.RoundToInt(rotated.x),
+                    Mathf.RoundToInt(rotated.y),
+                    Mathf.RoundToInt(rotated.z)
+                ));
+            }
+
+            return rotatedPositions;
+        }
+
+        private static Vector3Int GetMinOffset(IReadOnlyList<Vector3Int> positions)
+        {
+            if (positions == null || positions.Count == 0)
+            {
+                return Vector3Int.zero;
+            }
+
+            Vector3Int min = positions[0];
+            for (int i = 1; i < positions.Count; i++)
+            {
+                Vector3Int candidate = positions[i];
+                if (candidate.x < min.x) min.x = candidate.x;
+                if (candidate.y < min.y) min.y = candidate.y;
+                if (candidate.z < min.z) min.z = candidate.z;
+            }
+
+            return min;
+        }
+
+        private Vector3Int GetPlacementAnchorOffset()
+        {
+            return GetMinOffset(GetRawRotatedBlockPositions());
+        }
+
+        private float GetPlacementLiftFromOffset(Vector3Int anchorOffset)
+        {
+            return Mathf.Max(0f, -anchorOffset.y) * layerStepY;
+        }
+
+        private Vector3 GetSnappedRootWorldPosition(GameBoard board, Vector3Int placementGridPosition, Vector3Int anchorOffset)
+        {
+            Vector3Int rootGridPosition = new Vector3Int(
+                placementGridPosition.x - anchorOffset.x,
+                0,
+                placementGridPosition.z - anchorOffset.z
+            );
+
+            Vector3 worldPosition = board.GridToWorld(rootGridPosition.x, 0, rootGridPosition.z);
+            worldPosition.y += GetPlacementLiftFromOffset(anchorOffset);
+            return worldPosition;
+        }
+
+        private void ClearBoardHighlights()
+        {
+            if (previewBoard != null)
+            {
+                previewBoard.ClearHighlights();
+            }
+
+            if (gameBoard != null && gameBoard != previewBoard)
+            {
+                gameBoard.ClearHighlights();
+            }
         }
 
         public int GetMaxHeight()
@@ -832,6 +1005,16 @@ namespace Ubongo
         public void ResetLayerHighlight()
         {
             UpdateVisualFeedback();
+        }
+
+        private void ApplyPieceLayer(GameObject target)
+        {
+            if (target == null || pieceLayerIndex < 0)
+            {
+                return;
+            }
+
+            target.layer = pieceLayerIndex;
         }
     }
 }

@@ -1,0 +1,21 @@
+{
+    "name": "Ubongo.Tests.EditMode",
+    "rootNamespace": "Ubongo.Tests.EditMode",
+    "references": [
+        "GUID:f895984e3ffd24808b74960551e22d44"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false,
+    "optionalUnityReferences": [
+        "TestAssemblies"
+    ]
+}

@@ -22,10 +22,10 @@ namespace Ubongo.Editor
             }
 
             // Position camera for isometric-like view of the puzzle board
-            mainCamera.transform.position = new Vector3(0, 10, -10);
-            mainCamera.transform.rotation = Quaternion.Euler(45, 0, 0);
-            mainCamera.orthographic = false;
-            mainCamera.fieldOfView = 60;
+            mainCamera.transform.position = new Vector3(0, 10, -7);
+            mainCamera.transform.rotation = Quaternion.Euler(35, 0, 0);
+            mainCamera.orthographic = true;
+            mainCamera.orthographicSize = 5f;
             mainCamera.nearClipPlane = 0.1f;
             mainCamera.farClipPlane = 100f;
             mainCamera.backgroundColor = new Color(0.1f, 0.1f, 0.15f);

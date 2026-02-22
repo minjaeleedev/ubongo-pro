@@ -81,6 +81,22 @@ namespace Ubongo
         public List<PieceDefinition> Pieces;
         public Vector3Int BoardSize;
         public TargetArea TargetArea;
+        public List<SolutionPlacement> SolutionPlacements;
+    }
+
+    [System.Serializable]
+    public struct SolutionPlacement
+    {
+        public int PieceIndex;
+        public int RotationIndex;
+        public Vector3Int Position;
+
+        public SolutionPlacement(int pieceIndex, int rotationIndex, Vector3Int position)
+        {
+            PieceIndex = pieceIndex;
+            RotationIndex = rotationIndex;
+            Position = position;
+        }
     }
 
     /// <summary>
@@ -89,21 +105,33 @@ namespace Ubongo
     public class LevelGenerator : MonoBehaviour
     {
         private const int MaxHeight = 2;
+        private const string PieceLayerName = "Piece";
 
         [Header("Piece Spawn Settings")]
         [SerializeField] private GameObject piecePrefab;
         [SerializeField] private Transform pieceSpawnArea;
         [SerializeField] private float spawnSpacing = 3f;
+        [SerializeField] private float spawnDistance = 7f;
+        [SerializeField] private float spawnHeight = 0.8f;
 
         [Header("Generation Settings")]
         [SerializeField] private int maxGenerationAttempts = 100;
 
         private List<GameObject> currentPieces = new List<GameObject>();
         private PieceDefinition[] allPieces;
+        private int pieceLayerIndex = -1;
+        private LevelData currentLevelData;
+
+        public LevelData CurrentLevelData => currentLevelData;
 
         private void Awake()
         {
             InitializePieces();
+            pieceLayerIndex = LayerMask.NameToLayer(PieceLayerName);
+            if (pieceLayerIndex < 0)
+            {
+                Debug.LogWarning($"[{nameof(LevelGenerator)}] Layer '{PieceLayerName}' not found. Spawned pieces keep default layer.");
+            }
         }
 
         private void InitializePieces()
@@ -116,11 +144,27 @@ namespace Ubongo
         /// </summary>
         public void GenerateLevel(int levelNumber)
         {
+            LevelData levelData = GenerateLevelData(levelNumber);
+            SpawnFromLevelData(levelData);
+        }
+
+        public LevelData GenerateLevelData(int levelNumber)
+        {
+            DifficultyLevel difficulty = GetDifficultyForLevel(levelNumber);
+            currentLevelData = GenerateSolvablePuzzle(difficulty, levelNumber);
+            return currentLevelData;
+        }
+
+        public void SpawnFromLevelData(LevelData levelData)
+        {
             ClearCurrentPieces();
 
-            DifficultyLevel difficulty = GetDifficultyForLevel(levelNumber);
-            LevelData levelData = GenerateSolvablePuzzle(difficulty, levelNumber);
+            if (levelData == null || levelData.Pieces == null || levelData.Pieces.Count == 0)
+            {
+                return;
+            }
 
+            currentLevelData = levelData;
             SpawnPieces(levelData.Pieces);
         }
 
@@ -132,6 +176,7 @@ namespace Ubongo
             LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
             List<PieceDefinition> selectedPieces = null;
             TargetArea targetArea = null;
+            List<SolutionPlacement> solutionPlacements = null;
             int totalBlocks = 0;
 
             for (int attempt = 0; attempt < maxGenerationAttempts; attempt++)
@@ -145,8 +190,7 @@ namespace Ubongo
 
                 if (targetArea.TotalCells == totalBlocks)
                 {
-                    // Verify the puzzle has at least one solution
-                    if (HasSolution(selectedPieces, targetArea))
+                    if (TryFindSolution(selectedPieces, targetArea, out solutionPlacements))
                     {
                         break;
                     }
@@ -162,7 +206,8 @@ namespace Ubongo
                 TimeLimit = config.TimeLimit,
                 Pieces = selectedPieces,
                 BoardSize = boardSize,
-                TargetArea = targetArea
+                TargetArea = targetArea,
+                SolutionPlacements = solutionPlacements ?? new List<SolutionPlacement>()
             };
         }
 
@@ -323,12 +368,10 @@ namespace Ubongo
             return TargetArea.CreateTShaped(topWidth, topDepth, stemWidth, stemDepth);
         }
 
-        /// <summary>
-        /// Simple check if a puzzle configuration has at least one solution.
-        /// Uses a basic backtracking approach.
-        /// </summary>
-        private bool HasSolution(List<PieceDefinition> pieces, TargetArea targetArea)
+        private bool TryFindSolution(List<PieceDefinition> pieces, TargetArea targetArea, out List<SolutionPlacement> solutionPlacements)
         {
+            solutionPlacements = null;
+
             if (pieces == null || pieces.Count == 0 || targetArea == null)
             {
                 return false;
@@ -340,14 +383,24 @@ namespace Ubongo
                 return false;
             }
 
-            // Get all target cells
-            var targetCells = targetArea.GetAllCells().ToList();
             var board = new bool[targetArea.Width + 4, MaxHeight, targetArea.Depth + 4];
+            var workingPlacements = new List<SolutionPlacement>(pieces.Count);
 
-            return TrySolve(board, pieces, 0, targetArea);
+            if (!TrySolve(board, pieces, 0, targetArea, workingPlacements))
+            {
+                return false;
+            }
+
+            solutionPlacements = new List<SolutionPlacement>(workingPlacements);
+            return true;
         }
 
-        private bool TrySolve(bool[,,] board, List<PieceDefinition> pieces, int pieceIndex, TargetArea targetArea)
+        private bool TrySolve(
+            bool[,,] board,
+            List<PieceDefinition> pieces,
+            int pieceIndex,
+            TargetArea targetArea,
+            List<SolutionPlacement> workingPlacements)
         {
             if (pieceIndex >= pieces.Count)
             {
@@ -378,12 +431,14 @@ namespace Ubongo
                         if (CanPlacePieceOnBoard(board, rotatedBlocks, position, targetArea))
                         {
                             PlacePieceOnBoard(board, rotatedBlocks, position, true);
+                            workingPlacements.Add(new SolutionPlacement(pieceIndex, rotationIndex, position));
 
-                            if (TrySolve(board, pieces, pieceIndex + 1, targetArea))
+                            if (TrySolve(board, pieces, pieceIndex + 1, targetArea, workingPlacements))
                             {
                                 return true;
                             }
 
+                            workingPlacements.RemoveAt(workingPlacements.Count - 1);
                             PlacePieceOnBoard(board, rotatedBlocks, position, false);
                         }
                     }
@@ -472,35 +527,31 @@ namespace Ubongo
         /// </summary>
         private void SpawnPieces(List<PieceDefinition> pieces)
         {
+            Vector3 spawnAnchor = CalculateSpawnAnchor();
+
             if (pieceSpawnArea == null)
             {
                 GameObject spawnArea = new GameObject("PieceSpawnArea");
-                spawnArea.transform.position = new Vector3(8f, 0f, 0f);
+                spawnArea.transform.SetParent(transform);
                 pieceSpawnArea = spawnArea.transform;
             }
 
-            float currentX = 0f;
-            float currentZ = 0f;
-            int piecesPerRow = 3;
-            int currentPieceIndex = 0;
+            pieceSpawnArea.position = spawnAnchor;
 
-            foreach (PieceDefinition pieceDef in pieces)
+            float totalWidth = (pieces.Count - 1) * spawnSpacing;
+            Vector3 rowDirection = GetSpawnRowDirection();
+            Vector3 startOffset = -rowDirection * (totalWidth * 0.5f);
+
+            for (int i = 0; i < pieces.Count; i++)
             {
+                PieceDefinition pieceDef = pieces[i];
                 GameObject pieceObject = CreatePieceObject(pieceDef);
 
-                Vector3 spawnPosition = pieceSpawnArea.position + new Vector3(currentX, 0f, currentZ);
+                Vector3 spawnPosition = pieceSpawnArea.position + startOffset + (rowDirection * i * spawnSpacing);
                 pieceObject.transform.position = spawnPosition;
+                pieceObject.transform.rotation = Quaternion.identity;
 
                 currentPieces.Add(pieceObject);
-
-                currentPieceIndex++;
-                currentX += spawnSpacing;
-
-                if (currentPieceIndex % piecesPerRow == 0)
-                {
-                    currentX = 0f;
-                    currentZ -= spawnSpacing;
-                }
             }
         }
 
@@ -528,8 +579,62 @@ namespace Ubongo
 
             puzzlePiece.SetBlockPositions(pieceDef.Blocks.ToList());
             puzzlePiece.SetPieceColor(pieceDef.DefaultColor);
+            ApplyLayerRecursively(pieceObject, pieceLayerIndex);
 
             return pieceObject;
+        }
+
+        private Vector3 CalculateSpawnAnchor()
+        {
+            GameBoard board = FindAnyObjectByType<GameBoard>();
+            Vector3 boardCenter = board != null ? board.GetBoardCenterWorld() : Vector3.zero;
+            Vector3 leftDirection = GetSpawnLeftDirection();
+
+            return boardCenter + (leftDirection * spawnDistance) + (Vector3.up * spawnHeight);
+        }
+
+        private Vector3 GetSpawnLeftDirection()
+        {
+            Camera cam = Camera.main;
+            if (cam == null)
+            {
+                return Vector3.left;
+            }
+
+            Vector3 projectedLeft = Vector3.ProjectOnPlane(-cam.transform.right, Vector3.up);
+            if (projectedLeft.sqrMagnitude < 0.0001f)
+            {
+                return Vector3.left;
+            }
+
+            return projectedLeft.normalized;
+        }
+
+        private Vector3 GetSpawnRowDirection()
+        {
+            Vector3 leftDirection = GetSpawnLeftDirection();
+            Vector3 rowDirection = Vector3.Cross(Vector3.up, leftDirection);
+
+            if (rowDirection.sqrMagnitude < 0.0001f)
+            {
+                return Vector3.forward;
+            }
+
+            return rowDirection.normalized;
+        }
+
+        private static void ApplyLayerRecursively(GameObject target, int layerIndex)
+        {
+            if (target == null || layerIndex < 0)
+            {
+                return;
+            }
+
+            target.layer = layerIndex;
+            foreach (Transform child in target.transform)
+            {
+                ApplyLayerRecursively(child.gameObject, layerIndex);
+            }
         }
 
         /// <summary>
@@ -552,8 +657,7 @@ namespace Ubongo
         /// </summary>
         public LevelData GetLevelData(int levelNumber)
         {
-            DifficultyLevel difficulty = GetDifficultyForLevel(levelNumber);
-            return GenerateSolvablePuzzle(difficulty, levelNumber);
+            return GenerateLevelData(levelNumber);
         }
 
         /// <summary>
@@ -562,6 +666,41 @@ namespace Ubongo
         public PieceDefinition[] GetAllPieceDefinitions()
         {
             return allPieces ?? PieceCatalog.GetAllPieces();
+        }
+
+        public bool TryGetSpawnedPiecesBounds(out Bounds bounds)
+        {
+            bounds = default;
+            bool hasBounds = false;
+
+            foreach (GameObject piece in currentPieces)
+            {
+                if (piece == null)
+                {
+                    continue;
+                }
+
+                Renderer[] renderers = piece.GetComponentsInChildren<Renderer>();
+                foreach (Renderer renderer in renderers)
+                {
+                    if (renderer == null || !renderer.enabled)
+                    {
+                        continue;
+                    }
+
+                    if (!hasBounds)
+                    {
+                        bounds = renderer.bounds;
+                        hasBounds = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(renderer.bounds);
+                    }
+                }
+            }
+
+            return hasBounds;
         }
 
         /// <summary>

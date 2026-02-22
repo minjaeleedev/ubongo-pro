@@ -6,6 +6,9 @@ namespace Ubongo
 {
     public class InputManager : MonoBehaviour
     {
+        private const string PieceLayerName = "Piece";
+        private const string BoardLayerName = "Board";
+
         public static InputManager Instance { get; private set; }
 
         [Header("Layer Masks")]
@@ -13,7 +16,7 @@ namespace Ubongo
         [SerializeField] private LayerMask boardLayerMask = -1;
 
         [Header("Settings")]
-        [SerializeField] private float dragHeight = 2f;
+        [SerializeField] private float dragHeight = 0.5f;
 
         private UbongoInputActions inputActions;
         private Camera mainCamera;
@@ -63,6 +66,29 @@ namespace Ubongo
 
             inputActions = new UbongoInputActions();
             mainCamera = Camera.main;
+            ConfigureDefaultLayerMasks();
+        }
+
+        private void ConfigureDefaultLayerMasks()
+        {
+            pieceLayerMask = ResolveDefaultMask(pieceLayerMask, PieceLayerName);
+            boardLayerMask = ResolveDefaultMask(boardLayerMask, BoardLayerName);
+        }
+
+        private static LayerMask ResolveDefaultMask(LayerMask currentMask, string layerName)
+        {
+            if (currentMask != -1)
+            {
+                return currentMask;
+            }
+
+            int layerIndex = LayerMask.NameToLayer(layerName);
+            if (layerIndex < 0)
+            {
+                return currentMask;
+            }
+
+            return 1 << layerIndex;
         }
 
         private void OnEnable()
@@ -311,7 +337,30 @@ namespace Ubongo
             }
 
             Ray ray = mainCamera.ScreenPointToRay(currentPointerPosition);
-            return Physics.Raycast(ray, out hit, 100f, boardLayerMask);
+            RaycastHit[] hits = Physics.RaycastAll(ray, 100f, boardLayerMask, QueryTriggerInteraction.Collide);
+            if (hits == null || hits.Length == 0)
+            {
+                hit = default;
+                return false;
+            }
+
+            Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
+            foreach (RaycastHit candidate in hits)
+            {
+                if (candidate.collider == null)
+                {
+                    continue;
+                }
+
+                if (candidate.collider.GetComponentInParent<GameBoard>() != null)
+                {
+                    hit = candidate;
+                    return true;
+                }
+            }
+
+            hit = default;
+            return false;
         }
     }
 }
