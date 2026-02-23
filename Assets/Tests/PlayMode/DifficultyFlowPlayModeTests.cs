@@ -50,6 +50,40 @@ namespace Ubongo.Tests.PlayMode
             yield return DestroyAndWait(uiObject);
         }
 
+        [UnityTest]
+        public IEnumerator GameManager_SetGameMode_MultiplayerRequest_FallsBackToClassic()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            GameManager manager = managerObject.AddComponent<GameManager>();
+            yield return null;
+
+            manager.SetGameMode(GameMode.Multiplayer);
+
+            Assert.AreEqual(GameMode.Classic, manager.CurrentMode);
+            yield return DestroyAndWait(managerObject);
+        }
+
+        [UnityTest]
+        public IEnumerator GameManager_StartGame_ZenThenClassic_ResetsHintsByModeDefaults()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            GameManager manager = managerObject.AddComponent<GameManager>();
+            yield return null;
+
+            manager.SetGameMode(GameMode.Zen);
+            manager.StartGame(DifficultyLevel.Easy);
+            Assert.IsTrue(manager.EnableHints);
+
+            manager.SetGameMode(GameMode.Classic);
+            manager.SetHintsEnabled(true);
+            Assert.IsTrue(manager.EnableHints);
+
+            manager.StartGame(DifficultyLevel.Easy);
+            Assert.IsFalse(manager.EnableHints);
+
+            yield return DestroyAndWait(managerObject);
+        }
+
         private static IEnumerator WaitForRoundInProgress(RoundManager roundManager, int expectedRound, float timeoutSeconds = 2f)
         {
             float elapsed = 0f;

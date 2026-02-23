@@ -60,6 +60,44 @@ namespace Ubongo.Tests.EditMode
             UnityEngine.Object.DestroyImmediate(managerObject);
         }
 
+        [Test]
+        public void GameManager_SetGameMode_MultiplayerRequest_NormalizesToClassic()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            GameManager manager = managerObject.AddComponent<GameManager>();
+
+            manager.SetGameMode(GameMode.Multiplayer);
+
+            Assert.AreEqual(GameMode.Classic, manager.CurrentMode);
+            UnityEngine.Object.DestroyImmediate(managerObject);
+        }
+
+        [Test]
+        public void GameManager_SetGameMode_EmitsOnlyWhenEffectiveModeChanges()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            GameManager manager = managerObject.AddComponent<GameManager>();
+            manager.SetGameMode(GameMode.Classic);
+            int eventCount = 0;
+            GameMode lastMode = GameMode.Classic;
+
+            manager.OnGameModeChanged += mode =>
+            {
+                eventCount++;
+                lastMode = mode;
+            };
+
+            manager.SetGameMode(GameMode.Classic);
+            manager.SetGameMode(GameMode.Zen);
+            manager.SetGameMode(GameMode.Multiplayer);
+            manager.SetGameMode(GameMode.Multiplayer);
+
+            Assert.AreEqual(2, eventCount);
+            Assert.AreEqual(GameMode.Classic, lastMode);
+            Assert.AreEqual(GameMode.Classic, manager.CurrentMode);
+            UnityEngine.Object.DestroyImmediate(managerObject);
+        }
+
         private static void CleanupRuntimeSingletonObjects()
         {
             DestroyAllComponents<GameCompositionRoot>();

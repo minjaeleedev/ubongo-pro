@@ -3,6 +3,7 @@ using System;
 using System.Collections;
 using Ubongo.Systems;
 using Ubongo.Core;
+using Ubongo.Application.Policy;
 using Ubongo.Infrastructure.Settings;
 using Ubongo.Application.Bootstrap;
 using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
@@ -265,7 +266,18 @@ namespace Ubongo
         /// </summary>
         public void SetGameMode(GameMode mode)
         {
-            currentMode = mode;
+            GameMode normalizedMode = GameModePolicy.Normalize(mode);
+            if (mode == GameMode.Multiplayer && normalizedMode != mode)
+            {
+                Debug.LogWarning($"[{nameof(GameManager)}] Multiplayer mode is currently disabled. Falling back to {normalizedMode}.");
+            }
+
+            if (currentMode == normalizedMode)
+            {
+                return;
+            }
+
+            currentMode = normalizedMode;
             OnGameModeChanged?.Invoke(currentMode);
         }
 
@@ -286,6 +298,14 @@ namespace Ubongo
             EnsureEventSubscriptions();
 
             ResetGameState();
+            GameMode normalizedMode = GameModePolicy.Normalize(currentMode);
+            if (currentMode != normalizedMode)
+            {
+                Debug.LogWarning($"[{nameof(GameManager)}] Unsupported mode {currentMode} detected. Falling back to {normalizedMode}.");
+                currentMode = normalizedMode;
+            }
+
+            enableHints = GameModePolicy.GetDefaultHintsEnabled(currentMode);
 
             DifficultySystem?.SetDifficulty(difficulty);
             GemSystem?.ResetGemCollection();
@@ -349,7 +369,6 @@ namespace Ubongo
 
         private void StartZenMode()
         {
-            enableHints = true;
             RoundManager?.StartNewGame(CurrentDifficulty);
         }
 
@@ -680,8 +699,7 @@ namespace Ubongo
         /// </summary>
         private void CheckForTiebreaker()
         {
-            // TODO: 실제 멀티플레이어 구현 시 플레이어 결과 수집 필요
-            // 현재는 싱글플레이어 전용이므로 바로 게임 완료 처리
+            Debug.LogWarning($"[{nameof(GameManager)}] Multiplayer tiebreaker flow is disabled in current release. Completing game.");
             ChangeState(GameState.GameComplete);
         }
 
