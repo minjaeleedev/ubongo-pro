@@ -30,6 +30,10 @@ Keep script files aligned with assembly and namespace boundaries (`Ubongo` for r
 - For non-trivial logic, add Unity Test Framework tests under `Assets/Tests/EditMode` or `Assets/Tests/PlayMode`.
 - Test naming: `FeatureNameTests` classes and `Method_State_ExpectedResult` methods.
 - Include a short manual test checklist in PRs (scene, input flow, win/fail conditions).
+- Test through public contracts only (public methods/properties/events and externally observable behavior).
+- Do not call private methods or read/write private fields from tests (including reflection like `BindingFlags.NonPublic`, `GetField`, `GetMethod`).
+- Do not inject serialized private fields from tests to force state; use scene/prefab wiring or public setup APIs.
+- If a behavior is not testable via public API, prefer adding/refining explicit production seams (public interface, adapter, or testable composition root) instead of reflection-based tests.
 
 ## Commit & Pull Request Guidelines
 - Commit style in history is mostly conventional (`feat:`, `fix:`, `docs:`); use that format consistently.

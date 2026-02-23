@@ -2,16 +2,10 @@ using UnityEngine;
 using UnityEngine.UI;
 using System;
 using System.Collections;
+using Ubongo.Systems;
 
 namespace Ubongo
 {
-    public enum Difficulty
-    {
-        Junior,     // 3 blocks
-        Senior,     // 4 blocks
-        Master      // 5+ blocks
-    }
-
     public class UIManager : MonoBehaviour
     {
         [Header("UI Panels")]
@@ -61,7 +55,7 @@ namespace Ubongo
 
         [Header("Game Settings")]
         [SerializeField] private int totalRounds = 9;
-        [SerializeField] private Difficulty currentDifficulty = Difficulty.Junior;
+        [SerializeField] private DifficultyLevel currentDifficulty = DifficultyLevel.Easy;
 
         [Header("Visual Settings")]
         [SerializeField] private Color timerNormalColor = Color.white;
@@ -81,7 +75,7 @@ namespace Ubongo
         public int CurrentGems => currentGems;
         public int TotalGems => totalGems;
         public int CurrentRound => currentRound;
-        public Difficulty CurrentDifficulty => currentDifficulty;
+        public DifficultyLevel CurrentDifficulty => currentDifficulty;
 
         private void Start()
         {
@@ -160,10 +154,22 @@ namespace Ubongo
                 case GameState.Menu:
                     ShowPanel(menuPanel);
                     UpdateTotalGemsDisplay();
+                    UpdateDifficultyDisplay();
+                    break;
+
+                case GameState.DifficultySelect:
+                    ShowPanel(menuPanel);
+                    UpdateDifficultyDisplay();
+                    break;
+
+                case GameState.RoundStarting:
+                    ShowPanel(gamePanel);
+                    UpdateRoundDisplay();
                     break;
 
                 case GameState.Playing:
                     ShowPanel(gamePanel);
+                    SyncDifficultyFromGameManager();
                     UpdateLevel();
                     UpdateRoundDisplay();
                     UpdateGemDisplay();
@@ -184,6 +190,34 @@ namespace Ubongo
                 case GameState.RoundComplete:
                     ShowPanel(levelCompletePanel);
                     DisplayLevelCompleteResults();
+                    break;
+
+                case GameState.RoundFailed:
+                    ShowPanel(gameOverPanel);
+                    DisplayGameOverResults();
+                    break;
+
+                case GameState.SecondChance:
+                    ShowPanel(gamePanel);
+                    break;
+
+                case GameState.GameComplete:
+                    ShowPanel(gameOverPanel);
+                    DisplayGameOverResults();
+                    break;
+
+                case GameState.Tiebreaker:
+                    ShowPanel(gamePanel);
+                    break;
+
+                case GameState.TiebreakerComplete:
+                    ShowPanel(gameOverPanel);
+                    DisplayGameOverResults();
+                    break;
+
+                default:
+                    Debug.LogWarning($"[{nameof(UIManager)}] Unhandled game state: {newState}");
+                    ShowPanel(menuPanel);
                     break;
             }
         }
@@ -293,19 +327,36 @@ namespace Ubongo
 
             string difficultyName = currentDifficulty switch
             {
-                Difficulty.Junior => "Junior (3 blocks)",
-                Difficulty.Senior => "Senior (4 blocks)",
-                Difficulty.Master => "Master (5+ blocks)",
+                DifficultyLevel.Easy => "Easy (3 pieces)",
+                DifficultyLevel.Medium => "Medium (4 pieces)",
+                DifficultyLevel.Hard => "Hard (5 pieces)",
+                DifficultyLevel.Expert => "Expert (6 pieces)",
                 _ => "Unknown"
             };
+
+            if (gameManager != null && gameManager.DifficultySystem != null)
+            {
+                DifficultyConfig config = gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty);
+                difficultyName = $"{config.DisplayName} ({config.PieceCount} pieces)";
+            }
 
             difficultyText.text = difficultyName;
         }
 
-        public void SetDifficulty(Difficulty difficulty)
+        public void SetDifficulty(DifficultyLevel difficulty)
         {
             currentDifficulty = difficulty;
             UpdateDifficultyDisplay();
+        }
+
+        private void SyncDifficultyFromGameManager()
+        {
+            if (gameManager == null)
+            {
+                return;
+            }
+
+            currentDifficulty = gameManager.CurrentDifficulty;
         }
 
         public void AddGems(int amount)
@@ -523,8 +574,9 @@ namespace Ubongo
 
         private void OnStartGame()
         {
+            if (gameManager == null) return;
             ResetRounds();
-            gameManager.StartGame();
+            gameManager.StartGame(currentDifficulty);
         }
 
         private void OnPauseGame()
@@ -544,8 +596,9 @@ namespace Ubongo
 
         private void OnRetryGame()
         {
+            if (gameManager == null) return;
             ResetRounds();
-            gameManager.StartGame();
+            gameManager.StartGame(currentDifficulty);
         }
 
         private void OnReturnToMenu()

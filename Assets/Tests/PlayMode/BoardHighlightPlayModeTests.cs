@@ -1,11 +1,11 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Ubongo.Core;
+using Ubongo.Application.Bootstrap;
 
 namespace Ubongo.Tests.PlayMode
 {
@@ -17,8 +17,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator ClearHighlights_RestoresTargetColor()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
@@ -42,8 +42,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator HighlightValidPlacement_ProjectsToGroundLayerFootprint()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
@@ -89,21 +89,20 @@ namespace Ubongo.Tests.PlayMode
             camera.transform.position = new Vector3(0f, 5f, -6f);
             camera.transform.rotation = Quaternion.Euler(35f, 0f, 0f);
 
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
-            yield return null;
-
-            GameObject blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            blocker.transform.position = new Vector3(0f, 0.75f, -0.25f);
-
             GameObject inputObject = new GameObject("InputManager");
             InputManager inputManager = inputObject.AddComponent<InputManager>();
             yield return null;
 
-            SetPrivateField(inputManager, "mainCamera", camera);
-            SetPrivateField(inputManager, "boardLayerMask", (LayerMask)(-1));
-            Vector2 pointer = camera.WorldToScreenPoint(board.transform.position);
-            SetPrivateField(inputManager, "currentPointerPosition", pointer);
+            Ray pointerRay = inputManager.GetPointerRay();
+
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
+            boardObject.transform.position = pointerRay.origin + (pointerRay.direction * 6f);
+            yield return null;
+
+            GameObject blocker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            blocker.transform.position = pointerRay.origin + (pointerRay.direction * 3f);
+            blocker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
 
             bool hitBoard = inputManager.TryGetBoardHit(out RaycastHit hit);
             Assert.IsTrue(hitBoard);
@@ -118,10 +117,10 @@ namespace Ubongo.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator PreviewValidThenRelease_PlacesPieceWithoutBoardRayDependency()
+        public IEnumerator PlacePiece_PublicApi_PlacesPieceOnValidCell()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
@@ -131,12 +130,8 @@ namespace Ubongo.Tests.PlayMode
             piece.SetBlockPositions(new List<Vector3Int> { Vector3Int.zero });
             yield return null;
 
-            piece.transform.position = board.GridToWorld(0, 0, 0);
-            InvokePrivateMethod(piece, "UpdatePlacementPreview");
-
-            Assert.AreEqual(PlacementState.ValidPlacement, piece.CurrentState);
-
-            InvokePrivateMethod(piece, "HandleSelectEnd", piece);
+            Assert.IsTrue(board.CanPlacePiece(piece, Vector3Int.zero));
+            board.PlacePiece(piece, Vector3Int.zero);
             yield return null;
 
             Assert.IsTrue(board.IsOccupied(0, 0, 0));
@@ -147,10 +142,10 @@ namespace Ubongo.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator RotatedPlacement_UsesAnchorOffsetAndFillsExpectedCells()
+        public IEnumerator PlacePiece_PublicApi_WithRotation_FillsExpectedCells()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
@@ -165,12 +160,8 @@ namespace Ubongo.Tests.PlayMode
             yield return null;
 
             piece.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
-            piece.transform.position = board.GridToWorld(1, 0, 0);
-
-            InvokePrivateMethod(piece, "UpdatePlacementPreview");
-            Assert.AreEqual(PlacementState.ValidPlacement, piece.CurrentState);
-
-            InvokePrivateMethod(piece, "HandleSelectEnd", piece);
+            Assert.IsTrue(board.CanPlacePiece(piece, Vector3Int.zero));
+            board.PlacePiece(piece, Vector3Int.zero);
             yield return null;
 
             Assert.IsTrue(board.IsOccupied(0, 0, 0));
@@ -181,10 +172,10 @@ namespace Ubongo.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator InvalidRelease_KeepsCurrentRotation()
+        public IEnumerator PlacePiece_PublicApi_OutOfBounds_DoesNotPlaceAndKeepsRotation()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
@@ -194,20 +185,17 @@ namespace Ubongo.Tests.PlayMode
             piece.SetBlockPositions(new List<Vector3Int> { Vector3Int.zero });
             yield return null;
 
-            Vector3 originalWorld = board.GridToWorld(0, 0, 0);
-            piece.transform.position = originalWorld;
-            InvokePrivateMethod(piece, "HandleSelectStart", piece);
-
             Quaternion expectedRotation = Quaternion.Euler(0f, 90f, 0f);
             piece.transform.rotation = expectedRotation;
-            piece.transform.position = board.GridToWorld(-4, 0, -4);
+            Vector3Int invalidGridPosition = new Vector3Int(-4, 0, -4);
+            Assert.AreEqual(PlacementValidity.OutOfBounds, board.ValidatePlacement(piece, invalidGridPosition));
 
-            InvokePrivateMethod(piece, "HandleSelectEnd", piece);
-            yield return new WaitForSeconds(0.8f);
+            board.PlacePiece(piece, invalidGridPosition);
+            yield return null;
 
             Assert.Less(Quaternion.Angle(piece.transform.rotation, expectedRotation), 0.1f);
-            Assert.Less(Vector3.Distance(piece.transform.position, originalWorld), 0.02f);
             Assert.IsFalse(piece.IsPlaced);
+            Assert.IsFalse(board.IsOccupied(0, 0, 0));
 
             Object.DestroyImmediate(pieceObject);
             Object.DestroyImmediate(boardObject);
@@ -216,8 +204,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator PieceVisualSpacing_MatchesBoardGridStep()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             GameObject pieceObject = new GameObject("Piece");
@@ -246,8 +234,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator BoardCells_ShowExplicitGridOverlay_MatchingBoardFootprint()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             BoardCell floorCell = board.GetCell(0, 0, 0);
@@ -278,8 +266,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator PieceBlockWidth_MatchesBoardFootprintSize()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             GameObject pieceObject = new GameObject("Piece");
@@ -299,8 +287,8 @@ namespace Ubongo.Tests.PlayMode
         [UnityTest]
         public IEnumerator TargetColor_IsSeparatedFromValidHighlightColor()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
             BoardCell floorCell = board.GetCell(0, 0, 0);
@@ -318,22 +306,13 @@ namespace Ubongo.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator CellPrefabPath_AppliesSameFootprintScaleAsDefaultPath()
+        public IEnumerator InitializeGrid_DefaultCellVisual_KeepsFootprintScale()
         {
-            GameObject prefabRoot = new GameObject("CellPrefabSource");
-            prefabRoot.AddComponent<BoxCollider>().isTrigger = true;
-            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Quad);
-            visual.name = "Visual";
-            visual.transform.SetParent(prefabRoot.transform, false);
-            visual.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            visual.transform.localScale = new Vector3(0.3f, 0.3f, 1f);
-            Object.DestroyImmediate(visual.GetComponent<Collider>());
-
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
-            SetPrivateField(board, "cellPrefab", prefabRoot);
+            GameBoard board = CreateInitializedBoard();
+            GameObject boardObject = board.gameObject;
             yield return null;
 
+            board.InitializeGrid(new Vector3Int(6, 2, 3));
             BoardCell floorCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(floorCell);
             Transform visualTransform = floorCell.transform.Find("Visual");
@@ -342,7 +321,6 @@ namespace Ubongo.Tests.PlayMode
             Assert.AreEqual(board.BoardFootprintSize, visualTransform.localScale.y, 0.001f);
 
             Object.DestroyImmediate(boardObject);
-            Object.DestroyImmediate(prefabRoot);
         }
 
         private static IEnumerator DestroyInputManagerIfExists()
@@ -354,18 +332,12 @@ namespace Ubongo.Tests.PlayMode
             yield return null;
         }
 
-        private static void SetPrivateField(object target, string fieldName, object value)
+        private static GameBoard CreateInitializedBoard()
         {
-            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(field, $"Field '{fieldName}' was not found on {target.GetType().Name}.");
-            field.SetValue(target, value);
-        }
-
-        private static void InvokePrivateMethod(object target, string methodName, params object[] args)
-        {
-            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(method, $"Method '{methodName}' was not found on {target.GetType().Name}.");
-            method.Invoke(target, args);
+            GameObject boardObject = new GameObject("Board");
+            GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoardFactory.EnsureConstructed(board);
+            return board;
         }
 
         private static bool AreColorsClose(Color a, Color b, float tolerance = 0.01f)

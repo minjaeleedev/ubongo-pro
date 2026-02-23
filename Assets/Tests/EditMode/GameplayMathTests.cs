@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
+using Ubongo.Application.Bootstrap;
 
 namespace Ubongo.Tests.EditMode
 {
@@ -68,6 +69,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoardFactory.EnsureConstructed(board);
 
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             GameObject visualChild = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -88,6 +90,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
+            GameBoardFactory.EnsureConstructed(board);
 
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Renderer rootRenderer = cellRoot.GetComponent<Renderer>();

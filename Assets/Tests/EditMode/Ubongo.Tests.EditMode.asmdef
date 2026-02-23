@@ -2,7 +2,8 @@
     "name": "Ubongo.Tests.EditMode",
     "rootNamespace": "Ubongo.Tests.EditMode",
     "references": [
-        "GUID:f895984e3ffd24808b74960551e22d44"
+        "GUID:f895984e3ffd24808b74960551e22d44",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [
         "Editor"

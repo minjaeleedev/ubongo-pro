@@ -7,6 +7,27 @@ using Ubongo.Domain.Board;
 
 namespace Ubongo
 {
+    public sealed class BoardRuntimeServices
+    {
+        public BoardPlacementService PlacementService { get; }
+        public BoardWinConditionService WinConditionService { get; }
+
+        public BoardRuntimeServices(
+            BoardPlacementService placementService,
+            BoardWinConditionService winConditionService)
+        {
+            PlacementService = placementService ?? throw new ArgumentNullException(nameof(placementService));
+            WinConditionService = winConditionService ?? throw new ArgumentNullException(nameof(winConditionService));
+        }
+
+        public static BoardRuntimeServices CreateDefault()
+        {
+            return new BoardRuntimeServices(
+                new BoardPlacementService(),
+                new BoardWinConditionService());
+        }
+    }
+
     public class GameBoard : MonoBehaviour
     {
         private const int UbongoHeight = 2;
@@ -44,6 +65,7 @@ namespace Ubongo
         private int boardLayerIndex = -1;
         private Material gridLineMaterial;
         private MaterialPropertyBlock boardColorPropertyBlock;
+        private bool isConstructed;
 
         public int Width => width;
         public int Height => UbongoHeight;
@@ -53,6 +75,7 @@ namespace Ubongo
         public float BoardFootprintRatio => boardFootprintRatio;
         public float BoardFootprintSize => cellSize * boardFootprintRatio;
         public TargetArea CurrentTargetArea => targetArea;
+        public bool IsConstructed => isConstructed;
 
         public event Action<FillState> OnFillStateChanged;
         public event Action OnPuzzleSolved;
@@ -60,9 +83,6 @@ namespace Ubongo
         private void Awake()
         {
             NormalizeBoardDimensions();
-            placementService = new BoardPlacementService();
-            winConditionService = new BoardWinConditionService();
-            boardState = new BoardState(width, UbongoHeight, depth);
 
             boardLayerIndex = LayerMask.NameToLayer(BoardLayerName);
             if (boardLayerIndex < 0)
@@ -80,6 +100,7 @@ namespace Ubongo
         private void InitializeBoard()
         {
             NormalizeBoardDimensions();
+            EnsureConstructedOrThrow();
             EnsureBoardState();
             boardState.Resize(width, UbongoHeight, depth);
             CreateBoardContainer();
@@ -344,6 +365,7 @@ namespace Ubongo
         /// </summary>
         public void InitializeGrid(Vector3Int size)
         {
+            EnsureConstructedOrThrow();
             ClearBoard();
 
             Vector2Int normalizedSize = NormalizeBoardSize(size.x, size.z);
@@ -385,6 +407,11 @@ namespace Ubongo
         public BoardCell GetCell(int x, int y, int z)
         {
             if (x < 0 || x >= width || y < 0 || y >= UbongoHeight || z < 0 || z >= depth)
+            {
+                return null;
+            }
+
+            if (grid == null)
             {
                 return null;
             }
@@ -473,7 +500,9 @@ namespace Ubongo
         /// </summary>
         public PlacementValidity ValidatePlacement(PuzzlePiece piece, Vector3Int gridPosition)
         {
-            if (piece == null || placementService == null || boardState == null)
+            EnsureConstructedOrThrow();
+
+            if (piece == null || boardState == null)
             {
                 return PlacementValidity.OutOfBounds;
             }
@@ -487,7 +516,9 @@ namespace Ubongo
         /// </summary>
         public void PlacePiece(PuzzlePiece piece, Vector3Int gridPosition)
         {
-            if (piece == null || boardState == null || placementService == null)
+            EnsureConstructedOrThrow();
+
+            if (piece == null || boardState == null)
             {
                 return;
             }
@@ -578,7 +609,9 @@ namespace Ubongo
         /// </summary>
         private void CheckWinCondition()
         {
-            if (targetArea == null || winConditionService == null || boardState == null)
+            EnsureConstructedOrThrow();
+
+            if (targetArea == null || boardState == null)
             {
                 return;
             }
@@ -597,7 +630,9 @@ namespace Ubongo
         /// </summary>
         public FillState GetFillState()
         {
-            if (winConditionService == null || boardState == null || targetArea == null)
+            EnsureConstructedOrThrow();
+
+            if (boardState == null || targetArea == null)
             {
                 return new FillState(0, 0, 0);
             }
@@ -641,6 +676,11 @@ namespace Ubongo
         /// </summary>
         public void ClearHighlights()
         {
+            if (grid == null)
+            {
+                return;
+            }
+
             for (int x = 0; x < width; x++)
             {
                 for (int y = 0; y < UbongoHeight; y++)
@@ -879,6 +919,48 @@ namespace Ubongo
             }
 
             boardState = new BoardState(width, UbongoHeight, depth);
+        }
+
+        /// <summary>
+        /// Injects runtime services required by board domain logic.
+        /// </summary>
+        public void Construct(BoardRuntimeServices services)
+        {
+            if (services == null)
+            {
+                throw new ArgumentNullException(nameof(services));
+            }
+
+            if (isConstructed)
+            {
+                throw new InvalidOperationException($"[{nameof(GameBoard)}] {nameof(Construct)} can only be called once.");
+            }
+
+            if (services.PlacementService == null)
+            {
+                throw new ArgumentNullException(nameof(services.PlacementService));
+            }
+
+            if (services.WinConditionService == null)
+            {
+                throw new ArgumentNullException(nameof(services.WinConditionService));
+            }
+
+            placementService = services.PlacementService;
+            winConditionService = services.WinConditionService;
+            EnsureBoardState();
+            isConstructed = true;
+        }
+
+        private void EnsureConstructedOrThrow()
+        {
+            if (isConstructed && placementService != null && winConditionService != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(GameBoard)}] Runtime services are not initialized. Call {nameof(Construct)} before using board APIs.");
         }
 
         private void ApplyRendererColor(Renderer renderer, Color color)

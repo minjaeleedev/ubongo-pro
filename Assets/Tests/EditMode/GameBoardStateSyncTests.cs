@@ -1,8 +1,8 @@
+using System;
 using System.Collections.Generic;
-using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using Ubongo.Domain.Board;
+using Ubongo.Application.Bootstrap;
 
 namespace Ubongo.Tests.EditMode
 {
@@ -17,7 +17,7 @@ namespace Ubongo.Tests.EditMode
             {
                 if (spawnedObjects[i] != null)
                 {
-                    Object.DestroyImmediate(spawnedObjects[i]);
+                    UnityEngine.Object.DestroyImmediate(spawnedObjects[i]);
                 }
             }
             spawnedObjects.Clear();
@@ -32,16 +32,13 @@ namespace Ubongo.Tests.EditMode
 
             Assert.AreEqual(1, board.Width);
             Assert.AreEqual(1, board.Depth);
-
-            BoardState state = GetBoardState(board);
-            Assert.NotNull(state);
-            Assert.AreEqual(1, state.Width);
-            Assert.AreEqual(2, state.Height);
-            Assert.AreEqual(1, state.Depth);
+            Assert.IsNotNull(board.GetCell(0, 0, 0));
+            Assert.IsNotNull(board.GetCell(0, 1, 0));
+            Assert.IsNull(board.GetCell(1, 0, 0));
         }
 
         [Test]
-        public void RemovePieceFallback_RebuildsRemainingEntriesByPieceId()
+        public void RemovePiece_OnlyClearsRequestedPieceCells()
         {
             GameBoard board = CreateBoard();
             board.InitializeGrid(new Vector3Int(4, 2, 2));
@@ -59,54 +56,78 @@ namespace Ubongo.Tests.EditMode
             board.PlacePiece(pieceA, new Vector3Int(0, 0, 0));
             board.PlacePiece(pieceB, new Vector3Int(3, 0, 1));
 
-            BoardState state = GetBoardState(board);
-            Assert.NotNull(state);
-            state.Clear();
+            Assert.IsTrue(board.IsOccupied(0, 0, 0));
+            Assert.IsTrue(board.IsOccupied(1, 0, 0));
+            Assert.IsTrue(board.IsOccupied(3, 0, 1));
 
             board.RemovePiece(pieceA);
 
-            bool removed = state.Remove(pieceB.GetInstanceID().ToString(), out IReadOnlyList<Vector3Int> removedCells);
-            Assert.IsTrue(removed);
-            Assert.NotNull(removedCells);
-            Assert.AreEqual(1, removedCells.Count);
-            Assert.AreEqual(new Vector3Int(3, 0, 1), removedCells[0]);
+            Assert.IsFalse(board.IsOccupied(0, 0, 0));
+            Assert.IsFalse(board.IsOccupied(1, 0, 0));
+            Assert.IsTrue(board.IsOccupied(3, 0, 1));
+            Assert.IsFalse(pieceA.IsPlaced);
+            Assert.IsTrue(pieceB.IsPlaced);
+        }
+
+        [Test]
+        public void Construct_WhenCalledTwice_ThrowsInvalidOperationException()
+        {
+            GameBoard board = CreateUninitializedBoard();
+            board.Construct(BoardRuntimeServices.CreateDefault());
+
+            Assert.Throws<InvalidOperationException>(() => board.Construct(BoardRuntimeServices.CreateDefault()));
+        }
+
+        [Test]
+        public void InitializeGrid_WithoutConstruct_ThrowsInvalidOperationException()
+        {
+            GameBoard board = CreateUninitializedBoard();
+
+            Assert.Throws<InvalidOperationException>(() => board.InitializeGrid(new Vector3Int(1, 2, 1)));
+        }
+
+        [Test]
+        public void ValidatePlacement_WithoutConstruct_ThrowsInvalidOperationException()
+        {
+            GameBoard board = CreateUninitializedBoard();
+            PuzzlePiece piece = CreatePiece("Piece", new List<Vector3Int> { Vector3Int.zero });
+
+            Assert.Throws<InvalidOperationException>(() => board.ValidatePlacement(piece, Vector3Int.zero));
+        }
+
+        [Test]
+        public void Construct_WhenCalledOnce_EnablesBoardInitialization()
+        {
+            GameBoard board = CreateUninitializedBoard();
+            board.Construct(BoardRuntimeServices.CreateDefault());
+
+            board.InitializeGrid(new Vector3Int(1, 2, 1));
+
+            Assert.IsTrue(board.IsConstructed);
+            Assert.IsNotNull(board.GetCell(0, 0, 0));
         }
 
         private GameBoard CreateBoard()
         {
+            GameBoard board = CreateUninitializedBoard();
+            GameBoardFactory.EnsureConstructed(board);
+            return board;
+        }
+
+        private GameBoard CreateUninitializedBoard()
+        {
             GameObject boardObject = new GameObject("GameBoard_Test");
             spawnedObjects.Add(boardObject);
-
-            GameBoard board = boardObject.AddComponent<GameBoard>();
-            if (GetBoardState(board) == null)
-            {
-                InvokeNonPublic(board, "Awake");
-            }
-
-            return board;
+            return boardObject.AddComponent<GameBoard>();
         }
 
         private PuzzlePiece CreatePiece(string name, List<Vector3Int> blocks)
         {
             GameObject pieceObject = new GameObject(name);
             spawnedObjects.Add(pieceObject);
-
             PuzzlePiece piece = pieceObject.AddComponent<PuzzlePiece>();
             piece.SetBlockPositions(blocks);
             return piece;
-        }
-
-        private static BoardState GetBoardState(GameBoard board)
-        {
-            FieldInfo field = typeof(GameBoard).GetField("boardState", BindingFlags.NonPublic | BindingFlags.Instance);
-            return field?.GetValue(board) as BoardState;
-        }
-
-        private static void InvokeNonPublic(object target, string methodName)
-        {
-            MethodInfo method = target.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.NotNull(method, $"Expected method '{methodName}' was not found.");
-            method.Invoke(target, null);
         }
     }
 }

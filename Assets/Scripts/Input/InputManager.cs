@@ -150,34 +150,94 @@ namespace Ubongo
 
         private void SubscribeToDebugActions()
         {
-            inputActions.Debug.Help.performed += ctx => OnToggleHelp?.Invoke();
-            inputActions.Debug.ToggleDebug.performed += ctx => OnToggleDebugPanel?.Invoke();
-            inputActions.Debug.ToggleGenerator.performed += ctx => OnToggleGenerator?.Invoke();
-            inputActions.Debug.ToggleRotation.performed += ctx => OnToggleRotation?.Invoke();
-            inputActions.Debug.QuickGenerate.performed += ctx => OnQuickGenerate?.Invoke();
-            inputActions.Debug.AutoSolve.performed += ctx => OnAutoSolve?.Invoke();
-            inputActions.Debug.StepSolution.performed += ctx => OnStepSolution?.Invoke();
-            inputActions.Debug.Export.performed += ctx => OnExport?.Invoke();
-            inputActions.Debug.ToggleGrid.performed += ctx => OnToggleGrid?.Invoke();
-            inputActions.Debug.ToggleWireframe.performed += ctx => OnToggleWireframe?.Invoke();
-            inputActions.Debug.ToggleStats.performed += ctx => OnToggleStats?.Invoke();
-            inputActions.Debug.ResetPuzzle.performed += ctx => OnResetPuzzle?.Invoke();
+            inputActions.Debug.Help.performed += OnHelpPerformed;
+            inputActions.Debug.ToggleDebug.performed += OnToggleDebugPerformed;
+            inputActions.Debug.ToggleGenerator.performed += OnToggleGeneratorPerformed;
+            inputActions.Debug.ToggleRotation.performed += OnToggleRotationPerformed;
+            inputActions.Debug.QuickGenerate.performed += OnQuickGeneratePerformed;
+            inputActions.Debug.AutoSolve.performed += OnAutoSolvePerformed;
+            inputActions.Debug.StepSolution.performed += OnStepSolutionPerformed;
+            inputActions.Debug.Export.performed += OnExportPerformed;
+            inputActions.Debug.ToggleGrid.performed += OnToggleGridPerformed;
+            inputActions.Debug.ToggleWireframe.performed += OnToggleWireframePerformed;
+            inputActions.Debug.ToggleStats.performed += OnToggleStatsPerformed;
+            inputActions.Debug.ResetPuzzle.performed += OnResetPuzzlePerformed;
         }
 
         private void UnsubscribeFromDebugActions()
         {
-            inputActions.Debug.Help.performed -= ctx => OnToggleHelp?.Invoke();
-            inputActions.Debug.ToggleDebug.performed -= ctx => OnToggleDebugPanel?.Invoke();
-            inputActions.Debug.ToggleGenerator.performed -= ctx => OnToggleGenerator?.Invoke();
-            inputActions.Debug.ToggleRotation.performed -= ctx => OnToggleRotation?.Invoke();
-            inputActions.Debug.QuickGenerate.performed -= ctx => OnQuickGenerate?.Invoke();
-            inputActions.Debug.AutoSolve.performed -= ctx => OnAutoSolve?.Invoke();
-            inputActions.Debug.StepSolution.performed -= ctx => OnStepSolution?.Invoke();
-            inputActions.Debug.Export.performed -= ctx => OnExport?.Invoke();
-            inputActions.Debug.ToggleGrid.performed -= ctx => OnToggleGrid?.Invoke();
-            inputActions.Debug.ToggleWireframe.performed -= ctx => OnToggleWireframe?.Invoke();
-            inputActions.Debug.ToggleStats.performed -= ctx => OnToggleStats?.Invoke();
-            inputActions.Debug.ResetPuzzle.performed -= ctx => OnResetPuzzle?.Invoke();
+            inputActions.Debug.Help.performed -= OnHelpPerformed;
+            inputActions.Debug.ToggleDebug.performed -= OnToggleDebugPerformed;
+            inputActions.Debug.ToggleGenerator.performed -= OnToggleGeneratorPerformed;
+            inputActions.Debug.ToggleRotation.performed -= OnToggleRotationPerformed;
+            inputActions.Debug.QuickGenerate.performed -= OnQuickGeneratePerformed;
+            inputActions.Debug.AutoSolve.performed -= OnAutoSolvePerformed;
+            inputActions.Debug.StepSolution.performed -= OnStepSolutionPerformed;
+            inputActions.Debug.Export.performed -= OnExportPerformed;
+            inputActions.Debug.ToggleGrid.performed -= OnToggleGridPerformed;
+            inputActions.Debug.ToggleWireframe.performed -= OnToggleWireframePerformed;
+            inputActions.Debug.ToggleStats.performed -= OnToggleStatsPerformed;
+            inputActions.Debug.ResetPuzzle.performed -= OnResetPuzzlePerformed;
+        }
+
+        private void OnHelpPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleHelp?.Invoke();
+        }
+
+        private void OnToggleDebugPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleDebugPanel?.Invoke();
+        }
+
+        private void OnToggleGeneratorPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleGenerator?.Invoke();
+        }
+
+        private void OnToggleRotationPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleRotation?.Invoke();
+        }
+
+        private void OnQuickGeneratePerformed(InputAction.CallbackContext ctx)
+        {
+            OnQuickGenerate?.Invoke();
+        }
+
+        private void OnAutoSolvePerformed(InputAction.CallbackContext ctx)
+        {
+            OnAutoSolve?.Invoke();
+        }
+
+        private void OnStepSolutionPerformed(InputAction.CallbackContext ctx)
+        {
+            OnStepSolution?.Invoke();
+        }
+
+        private void OnExportPerformed(InputAction.CallbackContext ctx)
+        {
+            OnExport?.Invoke();
+        }
+
+        private void OnToggleGridPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleGrid?.Invoke();
+        }
+
+        private void OnToggleWireframePerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleWireframe?.Invoke();
+        }
+
+        private void OnToggleStatsPerformed(InputAction.CallbackContext ctx)
+        {
+            OnToggleStats?.Invoke();
+        }
+
+        private void OnResetPuzzlePerformed(InputAction.CallbackContext ctx)
+        {
+            OnResetPuzzle?.Invoke();
         }
 
         private void OnPointPerformed(InputAction.CallbackContext ctx)

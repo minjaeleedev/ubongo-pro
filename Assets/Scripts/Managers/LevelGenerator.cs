@@ -104,6 +104,7 @@ namespace Ubongo
     /// </summary>
     public class LevelGenerator : MonoBehaviour
     {
+        private const int MinGenerationAttempts = 1;
         private const int MaxHeight = 2;
         private const string PieceLayerName = "Piece";
 
@@ -134,9 +135,36 @@ namespace Ubongo
             }
         }
 
+        private void OnValidate()
+        {
+            if (maxGenerationAttempts < MinGenerationAttempts)
+            {
+                maxGenerationAttempts = MinGenerationAttempts;
+            }
+        }
+
         private void InitializePieces()
         {
             allPieces = PieceCatalog.GetAllPieces();
+        }
+
+        private void EnsurePiecesInitialized()
+        {
+            if (allPieces == null)
+            {
+                InitializePieces();
+            }
+        }
+
+        private int GetGenerationAttemptCount()
+        {
+            if (maxGenerationAttempts < MinGenerationAttempts)
+            {
+                Debug.LogWarning($"[{nameof(LevelGenerator)}] maxGenerationAttempts must be >= {MinGenerationAttempts}. Clamping value.");
+                maxGenerationAttempts = MinGenerationAttempts;
+            }
+
+            return maxGenerationAttempts;
         }
 
         /// <summary>
@@ -144,26 +172,68 @@ namespace Ubongo
         /// </summary>
         public void GenerateLevel(int levelNumber)
         {
-            LevelData levelData = GenerateLevelData(levelNumber);
+            if (!TryCreateLevelData(levelNumber, out LevelData levelData))
+            {
+                Debug.LogError($"[{nameof(LevelGenerator)}] Failed to generate level {levelNumber}.");
+                return;
+            }
+
             SpawnFromLevelData(levelData);
         }
 
         public LevelData GenerateLevelData(int levelNumber)
         {
-            DifficultyLevel difficulty = GetDifficultyForLevel(levelNumber);
-            currentLevelData = GenerateSolvablePuzzle(difficulty, levelNumber);
-            return currentLevelData;
+            if (TryCreateLevelData(levelNumber, out LevelData levelData))
+            {
+                return levelData;
+            }
+
+            Debug.LogError($"[{nameof(LevelGenerator)}] GenerateLevelData failed for level {levelNumber}.");
+            return null;
         }
 
+        public LevelData GenerateLevelData(int levelNumber, DifficultyLevel difficulty)
+        {
+            if (TryCreateLevelData(levelNumber, difficulty, out LevelData levelData))
+            {
+                return levelData;
+            }
+
+            Debug.LogError($"[{nameof(LevelGenerator)}] GenerateLevelData failed for level {levelNumber} ({difficulty}).");
+            return null;
+        }
+
+        public bool TryCreateLevelData(int levelNumber, out LevelData levelData)
+        {
+            DifficultyLevel difficulty = GetDifficultyForLevel(levelNumber);
+            return TryCreateLevelData(levelNumber, difficulty, out levelData);
+        }
+
+        public bool TryCreateLevelData(int levelNumber, DifficultyLevel difficulty, out LevelData levelData)
+        {
+            if (!TryCreateSolvablePuzzle(difficulty, levelNumber, out levelData))
+            {
+                currentLevelData = null;
+                return false;
+            }
+
+            currentLevelData = levelData;
+            return true;
+        }
+
+        /// <summary>
+        /// Spawns pieces for the provided level payload.
+        /// Contract: invalid payload is treated as no-op.
+        /// Use <see cref="ClearSpawnedPieces"/> for explicit clear intent.
+        /// </summary>
         public void SpawnFromLevelData(LevelData levelData)
         {
-            ClearCurrentPieces();
-
             if (levelData == null || levelData.Pieces == null || levelData.Pieces.Count == 0)
             {
                 return;
             }
 
+            ClearCurrentPieces();
             currentLevelData = levelData;
             SpawnPieces(levelData.Pieces);
         }
@@ -173,42 +243,68 @@ namespace Ubongo
         /// </summary>
         public LevelData GenerateSolvablePuzzle(DifficultyLevel difficulty, int levelNumber = 1)
         {
-            LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
-            List<PieceDefinition> selectedPieces = null;
-            TargetArea targetArea = null;
-            List<SolutionPlacement> solutionPlacements = null;
-            int totalBlocks = 0;
-
-            for (int attempt = 0; attempt < maxGenerationAttempts; attempt++)
+            if (TryCreateSolvablePuzzle(difficulty, levelNumber, out LevelData levelData))
             {
-                selectedPieces = SelectPiecesForDifficulty(config);
-                totalBlocks = selectedPieces.Sum(p => p.BlockCount);
+                return levelData;
+            }
+
+            Debug.LogError($"[{nameof(LevelGenerator)}] GenerateSolvablePuzzle failed for level {levelNumber} ({difficulty}).");
+            return null;
+        }
+
+        private bool TryCreateSolvablePuzzle(DifficultyLevel difficulty, int levelNumber, out LevelData levelData)
+        {
+            levelData = null;
+            EnsurePiecesInitialized();
+
+            LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
+            int generationAttempts = GetGenerationAttemptCount();
+
+            for (int attempt = 0; attempt < generationAttempts; attempt++)
+            {
+                List<PieceDefinition> selectedPieces = SelectPiecesForDifficulty(config);
+                if (selectedPieces == null || selectedPieces.Count == 0)
+                {
+                    continue;
+                }
+
+                int totalBlocks = selectedPieces.Sum(p => p.BlockCount);
+                if (totalBlocks <= 0 || totalBlocks % MaxHeight != 0)
+                {
+                    continue;
+                }
 
                 // Calculate target area dimensions (must fit 2 layers exactly)
                 int footprintSize = totalBlocks / MaxHeight;
-                targetArea = CalculateTargetArea(footprintSize, difficulty);
-
-                if (targetArea.TotalCells == totalBlocks)
+                TargetArea targetArea = CalculateTargetArea(footprintSize, difficulty);
+                if (targetArea == null || targetArea.TotalCells != totalBlocks)
                 {
-                    if (TryFindSolution(selectedPieces, targetArea, out solutionPlacements))
-                    {
-                        break;
-                    }
+                    continue;
                 }
+
+                if (!TryFindSolution(selectedPieces, targetArea, out List<SolutionPlacement> solutionPlacements))
+                {
+                    continue;
+                }
+
+                levelData = new LevelData
+                {
+                    LevelNumber = levelNumber,
+                    Difficulty = difficulty,
+                    TimeLimit = config.TimeLimit,
+                    Pieces = selectedPieces,
+                    BoardSize = CalculateBoardSize(targetArea),
+                    TargetArea = targetArea,
+                    SolutionPlacements = solutionPlacements
+                };
+
+                return true;
             }
 
-            Vector3Int boardSize = CalculateBoardSize(targetArea);
-
-            return new LevelData
-            {
-                LevelNumber = levelNumber,
-                Difficulty = difficulty,
-                TimeLimit = config.TimeLimit,
-                Pieces = selectedPieces,
-                BoardSize = boardSize,
-                TargetArea = targetArea,
-                SolutionPlacements = solutionPlacements ?? new List<SolutionPlacement>()
-            };
+            Debug.LogWarning(
+                $"[{nameof(LevelGenerator)}] Failed to create a solvable puzzle. " +
+                $"level={levelNumber}, difficulty={difficulty}, attempts={generationAttempts}");
+            return false;
         }
 
         /// <summary>
@@ -646,10 +742,19 @@ namespace Ubongo
             {
                 if (piece != null)
                 {
-                    Destroy(piece);
+                    UnityObjectUtility.SafeDestroy(piece);
                 }
             }
             currentPieces.Clear();
+        }
+
+        /// <summary>
+        /// Explicitly clears currently spawned piece objects.
+        /// This is separated from spawn API to keep spawn contract side-effect free on invalid payload.
+        /// </summary>
+        public void ClearSpawnedPieces()
+        {
+            ClearCurrentPieces();
         }
 
         /// <summary>

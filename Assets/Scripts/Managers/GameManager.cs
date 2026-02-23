@@ -4,6 +4,7 @@ using System.Collections;
 using Ubongo.Systems;
 using Ubongo.Core;
 using Ubongo.Infrastructure.Settings;
+using Ubongo.Application.Bootstrap;
 using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
 
 namespace Ubongo
@@ -97,6 +98,7 @@ namespace Ubongo
         private GameObject solutionPreviewContainer;
         private Coroutine solutionPreviewCoroutine;
         private ISettingsStore settingsStore;
+        private bool hasInjectedSettingsStore;
 
         // Events
         public event Action<GameState> OnGameStateChanged;
@@ -144,7 +146,13 @@ namespace Ubongo
                 return;
             }
 
+            if (hasInjectedSettingsStore)
+            {
+                return;
+            }
+
             settingsStore = injectedSettingsStore;
+            hasInjectedSettingsStore = true;
             LoadSolutionRevealOption();
         }
 
@@ -201,14 +209,8 @@ namespace Ubongo
 
             // LevelGenerator와 GameBoard는 씬에서 찾기
             levelGenerator = FindAnyObjectByType<LevelGenerator>();
-            gameBoard = FindAnyObjectByType<GameBoard>();
-
-            // GameBoard가 없으면 동적 생성
-            if (gameBoard == null)
-            {
-                var boardObject = new GameObject("GameBoard");
-                gameBoard = boardObject.AddComponent<GameBoard>();
-            }
+            GameBoard existingBoard = gameBoard != null ? gameBoard : FindAnyObjectByType<GameBoard>();
+            gameBoard = GameBoardFactory.ResolveOrCreate(existingBoard);
 
             // InputManager가 없으면 동적 생성
             if (InputManager.Instance == null)
@@ -518,20 +520,29 @@ namespace Ubongo
             ClearSolutionPreview();
 
             // 퍼즐 생성
-            if (levelGenerator != null)
+            if (levelGenerator == null)
             {
-                var levelData = levelGenerator.GenerateLevelData(round);
-
-                if (gameBoard != null)
-                {
-                    gameBoard.InitializeGrid(levelData.BoardSize);
-                    gameBoard.SetTargetArea(levelData.TargetArea);
-                }
-
-                ConfigureGameplayView();
-                levelGenerator.SpawnFromLevelData(levelData);
-                ConfigureGameplayView();
+                Debug.LogError($"[{nameof(GameManager)}] LevelGenerator reference is missing. Round cannot start.");
+                ChangeState(GameState.RoundFailed);
+                return;
             }
+
+            if (!levelGenerator.TryCreateLevelData(round, CurrentDifficulty, out LevelData levelData) || levelData == null)
+            {
+                Debug.LogError($"[{nameof(GameManager)}] Failed to generate level data for round {round} ({CurrentDifficulty}).");
+                ChangeState(GameState.RoundFailed);
+                return;
+            }
+
+            if (gameBoard != null)
+            {
+                gameBoard.InitializeGrid(levelData.BoardSize);
+                gameBoard.SetTargetArea(levelData.TargetArea);
+            }
+
+            ConfigureGameplayView();
+            levelGenerator.SpawnFromLevelData(levelData);
+            ConfigureGameplayView();
 
             ChangeState(GameState.Playing);
         }

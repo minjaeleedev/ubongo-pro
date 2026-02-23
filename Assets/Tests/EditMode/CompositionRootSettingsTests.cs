@@ -1,4 +1,3 @@
-using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Application.Bootstrap;
@@ -42,21 +41,23 @@ namespace Ubongo.Tests.EditMode
         }
 
         [Test]
-        public void GameManager_Initialize_IsIdempotent()
+        public void GameManager_Initialize_IsIdempotent_AndKeepsFirstInjectedStore()
         {
             GameObject managerObject = new GameObject("GameManager_Test");
             GameManager manager = managerObject.AddComponent<GameManager>();
-            InMemorySettingsStore injectedStore = new InMemorySettingsStore();
+            InMemorySettingsStore firstStore = new InMemorySettingsStore();
+            InMemorySettingsStore secondStore = new InMemorySettingsStore();
 
-            manager.Initialize(injectedStore);
-            manager.Initialize(injectedStore);
+            manager.Initialize(firstStore);
+            manager.Initialize(secondStore);
             manager.SetShowSolutionOnTimeout(true);
 
-            FieldInfo settingsField = typeof(GameManager).GetField("settingsStore", BindingFlags.Instance | BindingFlags.NonPublic);
-            Assert.IsNotNull(settingsField);
-            Assert.AreSame(injectedStore, settingsField.GetValue(manager));
-            Assert.IsTrue(injectedStore.StoredValue);
-            Assert.AreEqual(1, injectedStore.SaveCallCount);
+            Assert.IsTrue(firstStore.StoredValue);
+            Assert.AreEqual(1, firstStore.SaveCallCount);
+            Assert.IsFalse(secondStore.StoredValue);
+            Assert.AreEqual(0, secondStore.SaveCallCount);
+
+            UnityEngine.Object.DestroyImmediate(managerObject);
         }
 
         private static void CleanupRuntimeSingletonObjects()
@@ -74,7 +75,7 @@ namespace Ubongo.Tests.EditMode
 
         private static void DestroyAllComponents<T>() where T : Component
         {
-            T[] components = Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            T[] components = UnityEngine.Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             foreach (T component in components)
             {
                 if (component == null)
@@ -82,7 +83,7 @@ namespace Ubongo.Tests.EditMode
                     continue;
                 }
 
-                Object.DestroyImmediate(component.gameObject);
+                UnityEngine.Object.DestroyImmediate(component.gameObject);
             }
         }
 
