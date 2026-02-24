@@ -1,5 +1,6 @@
 using UnityEngine;
 using System.Collections;
+using Ubongo.Domain;
 
 namespace Ubongo
 {
@@ -69,7 +70,7 @@ namespace Ubongo
         #region Serialized Fields
 
         [Header("Gem Configuration")]
-        [SerializeField] private GameColors.GemType gemType = GameColors.GemType.Ruby;
+        [SerializeField] private GemType gemType = GemType.Ruby;
         [SerializeField] private int facetCount = 16;
 
         [Header("Visual Settings")]
@@ -109,7 +110,7 @@ namespace Ubongo
 
         #region Properties
 
-        public GameColors.GemType Type => gemType;
+        public GemType Type => gemType;
         public Color GemColor => gemColor;
         public bool IsCollected => isCollected;
         public bool IsAnimating => isAnimating;
@@ -154,7 +155,7 @@ namespace Ubongo
         /// <summary>
         /// 특정 타입으로 초기화
         /// </summary>
-        public void Initialize(GameColors.GemType type)
+        public void Initialize(GemType type)
         {
             gemType = type;
             Initialize();
@@ -268,14 +269,14 @@ namespace Ubongo
 
         #region Gem Mesh Generation
 
-        private Mesh CreateGemMeshForType(GameColors.GemType type)
+        private Mesh CreateGemMeshForType(GemType type)
         {
             return type switch
             {
-                GameColors.GemType.Ruby => CreateOvalCutMesh(16),      // Oval Cut, 16 facets
-                GameColors.GemType.Sapphire => CreateRoundBrilliantMesh(24),  // Round Brilliant, 24 facets
-                GameColors.GemType.Emerald => CreateEmeraldCutMesh(12),   // Emerald Cut, 12 facets
-                GameColors.GemType.Amber => CreateCushionCutMesh(18),     // Cushion Cut, 18 facets
+                GemType.Ruby => CreateOvalCutMesh(16),      // Oval Cut, 16 facets
+                GemType.Sapphire => CreateRoundBrilliantMesh(24),  // Round Brilliant, 24 facets
+                GemType.Emerald => CreateEmeraldCutMesh(12),   // Emerald Cut, 12 facets
+                GemType.Amber => CreateCushionCutMesh(18),     // Cushion Cut, 18 facets
                 _ => CreateRoundBrilliantMesh(16)
             };
         }
@@ -667,14 +668,14 @@ namespace Ubongo
         /// <summary>
         /// 보석 타입별 facet 수 반환
         /// </summary>
-        public static int GetFacetCountForType(GameColors.GemType type)
+        public static int GetFacetCountForType(GemType type)
         {
             return type switch
             {
-                GameColors.GemType.Ruby => 16,
-                GameColors.GemType.Sapphire => 24,
-                GameColors.GemType.Emerald => 12,
-                GameColors.GemType.Amber => 18,
+                GemType.Ruby => 16,
+                GemType.Sapphire => 24,
+                GemType.Emerald => 12,
+                GemType.Amber => 18,
                 _ => 16
             };
         }
@@ -682,14 +683,14 @@ namespace Ubongo
         /// <summary>
         /// 보석 타입별 컷 이름 반환
         /// </summary>
-        public static string GetCutNameForType(GameColors.GemType type)
+        public static string GetCutNameForType(GemType type)
         {
             return type switch
             {
-                GameColors.GemType.Ruby => "Oval Cut",
-                GameColors.GemType.Sapphire => "Round Brilliant",
-                GameColors.GemType.Emerald => "Emerald Cut",
-                GameColors.GemType.Amber => "Cushion Cut",
+                GemType.Ruby => "Oval Cut",
+                GemType.Sapphire => "Round Brilliant",
+                GemType.Emerald => "Emerald Cut",
+                GemType.Amber => "Cushion Cut",
                 _ => "Unknown"
             };
         }
@@ -697,7 +698,7 @@ namespace Ubongo
         /// <summary>
         /// 새 보석 오브젝트 생성
         /// </summary>
-        public static GemVisual CreateGem(GameColors.GemType type, Vector3 position)
+        public static GemVisual CreateGem(GemType type, Vector3 position)
         {
             GameObject gemObj = new GameObject($"Gem_{type}");
             gemObj.transform.position = position;
@@ -717,7 +718,7 @@ namespace Ubongo
         /// </summary>
         public struct GemIconInfo
         {
-            public GameColors.GemType Type;
+            public GemType Type;
             public Color MainColor;
             public Color HighlightColor;
             public Color GradientStart;
@@ -728,55 +729,19 @@ namespace Ubongo
         /// <summary>
         /// 보석 타입별 아이콘 정보 반환
         /// </summary>
-        public static GemIconInfo GetIconInfo(GameColors.GemType type)
+        public static GemIconInfo GetIconInfo(GemType type)
         {
-            return type switch
+            GemDefinition definition = GemDefinitionCatalog.Get(type);
+            GemIconStyle iconStyle = definition.IconStyle;
+
+            return new GemIconInfo
             {
-                GameColors.GemType.Ruby => new GemIconInfo
-                {
-                    Type = type,
-                    MainColor = GameColors.Gems.Ruby,
-                    HighlightColor = Color.white,
-                    GradientStart = new Color(0.9f, 0.2f, 0.3f),
-                    GradientEnd = new Color(0.7f, 0.1f, 0.2f),
-                    Description = "Red oval with white highlight, warm gradient"
-                },
-                GameColors.GemType.Sapphire => new GemIconInfo
-                {
-                    Type = type,
-                    MainColor = GameColors.Gems.Sapphire,
-                    HighlightColor = Color.white,
-                    GradientStart = new Color(0.2f, 0.5f, 0.9f),
-                    GradientEnd = new Color(0.1f, 0.3f, 0.7f),
-                    Description = "Blue circle with star highlight, cool gradient"
-                },
-                GameColors.GemType.Emerald => new GemIconInfo
-                {
-                    Type = type,
-                    MainColor = GameColors.Gems.Emerald,
-                    HighlightColor = Color.white,
-                    GradientStart = new Color(0.2f, 0.6f, 0.3f),
-                    GradientEnd = new Color(0.1f, 0.4f, 0.2f),
-                    Description = "Green rectangle with corner cuts, natural gradient"
-                },
-                GameColors.GemType.Amber => new GemIconInfo
-                {
-                    Type = type,
-                    MainColor = GameColors.Gems.Amber,
-                    HighlightColor = Color.white,
-                    GradientStart = new Color(1f, 0.8f, 0.3f),
-                    GradientEnd = new Color(0.9f, 0.6f, 0.1f),
-                    Description = "Orange rounded square, warm honey gradient"
-                },
-                _ => new GemIconInfo
-                {
-                    Type = type,
-                    MainColor = Color.white,
-                    HighlightColor = Color.white,
-                    GradientStart = Color.white,
-                    GradientEnd = Color.gray,
-                    Description = "Unknown gem"
-                }
+                Type = type,
+                MainColor = definition.Color,
+                HighlightColor = iconStyle.HighlightColor,
+                GradientStart = iconStyle.GradientStart,
+                GradientEnd = iconStyle.GradientEnd,
+                Description = iconStyle.Description
             };
         }
 

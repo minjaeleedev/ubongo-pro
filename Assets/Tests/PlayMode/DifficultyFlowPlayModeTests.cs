@@ -2,6 +2,7 @@ using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using Ubongo.Domain;
 using Ubongo.Systems;
 
 namespace Ubongo.Tests.PlayMode

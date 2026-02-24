@@ -1,20 +1,10 @@
 using UnityEngine;
 using System;
 using System.Collections.Generic;
+using Ubongo.Domain;
 
 namespace Ubongo.Systems
 {
-    /// <summary>
-    /// 난이도 레벨 열거형
-    /// </summary>
-    public enum DifficultyLevel
-    {
-        Easy = 1,       // 초록 - 입문자용
-        Medium = 2,     // 노랑 - 기본 난이도
-        Hard = 3,       // 파랑 - 숙련자용
-        Expert = 4      // 빨강 - 전문가용
-    }
-
     /// <summary>
     /// 난이도별 설정 데이터 (불변)
     /// </summary>

@@ -2,7 +2,10 @@ using UnityEngine;
 using UnityEngine.UI;
 using System;
 using System.Collections;
+using Ubongo.Application.Formatting;
 using Ubongo.Systems;
+using Ubongo.Domain;
+using Ubongo.Application.Flow;
 
 namespace Ubongo
 {
@@ -325,22 +328,10 @@ namespace Ubongo
         {
             if (difficultyText == null) return;
 
-            string difficultyName = currentDifficulty switch
-            {
-                DifficultyLevel.Easy => "Easy (3 pieces)",
-                DifficultyLevel.Medium => "Medium (4 pieces)",
-                DifficultyLevel.Hard => "Hard (5 pieces)",
-                DifficultyLevel.Expert => "Expert (6 pieces)",
-                _ => "Unknown"
-            };
-
-            if (gameManager != null && gameManager.DifficultySystem != null)
-            {
-                DifficultyConfig config = gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty);
-                difficultyName = $"{config.DisplayName} ({config.PieceCount} pieces)";
-            }
-
-            difficultyText.text = difficultyName;
+            DifficultyConfig config = gameManager != null && gameManager.DifficultySystem != null
+                ? gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty)
+                : DifficultyConfig.CreateDefault(currentDifficulty);
+            difficultyText.text = DifficultyDisplayFormatter.Format(config);
         }
 
         public void SetDifficulty(DifficultyLevel difficulty)

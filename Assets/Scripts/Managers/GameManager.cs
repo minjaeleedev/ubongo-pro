@@ -3,43 +3,14 @@ using System;
 using System.Collections;
 using Ubongo.Systems;
 using Ubongo.Core;
+using Ubongo.Domain;
+using Ubongo.Application.Flow;
 using Ubongo.Application.Policy;
 using Ubongo.Infrastructure.Settings;
 using Ubongo.Application.Bootstrap;
-using DifficultyLevelSystem = Ubongo.Systems.DifficultyLevel;
 
 namespace Ubongo
 {
-    /// <summary>
-    /// 게임 상태 열거형
-    /// </summary>
-    public enum GameState
-    {
-        Menu,
-        DifficultySelect,
-        RoundStarting,
-        Playing,
-        Paused,
-        RoundComplete,
-        RoundFailed,
-        SecondChance,           // 재도전 라운드
-        GameComplete,
-        Tiebreaker,             // 타이브레이커 진행 중
-        TiebreakerComplete,     // 타이브레이커 완료
-        GameOver
-    }
-
-    /// <summary>
-    /// 게임 모드 열거형
-    /// </summary>
-    public enum GameMode
-    {
-        Classic,        // 클래식 9라운드
-        TimeAttack,     // 타임 어택
-        Zen,            // 젠 모드 (시간 제한 없음)
-        Multiplayer     // 멀티플레이어
-    }
-
     /// <summary>
     /// 게임 매니저 - 전체 게임 흐름 및 상태 관리
     /// </summary>
@@ -138,7 +109,7 @@ namespace Ubongo
         public int TotalRounds => RoundManager?.TotalRounds ?? 9;
         public float RemainingTime => RoundManager?.RemainingTime ?? 0f;
         public int TotalGemPoints => GemSystem?.TotalPoints ?? 0;
-        public DifficultyLevelSystem CurrentDifficulty => DifficultySystem?.CurrentDifficulty ?? DifficultyLevelSystem.Easy;
+        public DifficultyLevel CurrentDifficulty => DifficultySystem?.CurrentDifficulty ?? DifficultyLevel.Easy;
 
         public void Initialize(ISettingsStore injectedSettingsStore)
         {
@@ -179,7 +150,7 @@ namespace Ubongo
 #if UNITY_EDITOR
             if (autoStartInEditor)
             {
-                StartGame(DifficultyLevelSystem.Easy);
+                StartGame(DifficultyLevel.Easy);
             }
 #endif
         }
@@ -292,7 +263,7 @@ namespace Ubongo
         /// <summary>
         /// 게임 시작 (난이도 선택 후)
         /// </summary>
-        public void StartGame(DifficultyLevelSystem difficulty)
+        public void StartGame(DifficultyLevel difficulty)
         {
             // 이벤트 구독이 올바른 인스턴스에 되어있는지 확인
             EnsureEventSubscriptions();
@@ -332,7 +303,7 @@ namespace Ubongo
         /// </summary>
         public void StartGame()
         {
-            StartGame(DifficultyLevelSystem.Easy);
+            StartGame(DifficultyLevel.Easy);
         }
 
         private void EnsureEventSubscriptions()
@@ -864,7 +835,7 @@ namespace Ubongo
     public readonly struct GameResultData
     {
         public GameMode GameMode { get; }
-        public DifficultyLevelSystem Difficulty { get; }
+        public DifficultyLevel Difficulty { get; }
         public GameResultSummary RoundSummary { get; }
         public GemCollectionSummary GemSummary { get; }
         public int BonusScore { get; }
@@ -874,7 +845,7 @@ namespace Ubongo
 
         public GameResultData(
             GameMode gameMode,
-            DifficultyLevelSystem difficulty,
+            DifficultyLevel difficulty,
             GameResultSummary roundSummary,
             GemCollectionSummary gemSummary,
             int bonusScore,

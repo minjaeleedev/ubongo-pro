@@ -1,4 +1,5 @@
 using UnityEngine;
+using Ubongo.Domain;
 
 namespace Ubongo
 {
@@ -175,17 +176,6 @@ namespace Ubongo
         #region Gem Colors
 
         /// <summary>
-        /// 보석 타입
-        /// </summary>
-        public enum GemType
-        {
-            Ruby,
-            Sapphire,
-            Emerald,
-            Amber
-        }
-
-        /// <summary>
         /// 보석 색상 정의
         /// </summary>
         public static class Gems
@@ -193,47 +183,34 @@ namespace Ubongo
             /// <summary>
             /// Ruby - Crimson Red (Oval Cut, 16 facets)
             /// </summary>
-            public static readonly Color Ruby = new Color(227f / 255f, 28f / 255f, 61f / 255f, 1f);
+            public static readonly Color Ruby = GemDefinitionCatalog.GetColor(GemType.Ruby);
 
             /// <summary>
             /// Sapphire - Royal Blue (Round Brilliant, 24 facets)
             /// </summary>
-            public static readonly Color Sapphire = new Color(26f / 255f, 95f / 255f, 180f / 255f, 1f);
+            public static readonly Color Sapphire = GemDefinitionCatalog.GetColor(GemType.Sapphire);
 
             /// <summary>
             /// Emerald - Forest Green (Emerald Cut, 12 facets)
             /// </summary>
-            public static readonly Color Emerald = new Color(46f / 255f, 125f / 255f, 50f / 255f, 1f);
+            public static readonly Color Emerald = GemDefinitionCatalog.GetColor(GemType.Emerald);
 
             /// <summary>
             /// Amber - Golden Orange (Cushion Cut, 18 facets)
             /// </summary>
-            public static readonly Color Amber = new Color(255f / 255f, 179f / 255f, 0f / 255f, 1f);
+            public static readonly Color Amber = GemDefinitionCatalog.GetColor(GemType.Amber);
 
             /// <summary>
             /// 모든 보석 색상 배열
             /// </summary>
-            public static readonly Color[] AllGemColors = new Color[]
-            {
-                Ruby,
-                Sapphire,
-                Emerald,
-                Amber
-            };
+            public static readonly Color[] AllGemColors = GemDefinitionCatalog.AllColors;
 
             /// <summary>
             /// 보석 타입으로 색상 가져오기
             /// </summary>
             public static Color GetGemColor(GemType type)
             {
-                return type switch
-                {
-                    GemType.Ruby => Ruby,
-                    GemType.Sapphire => Sapphire,
-                    GemType.Emerald => Emerald,
-                    GemType.Amber => Amber,
-                    _ => Color.white
-                };
+                return GemDefinitionCatalog.GetColor(type);
             }
         }
 

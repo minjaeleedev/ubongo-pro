@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections.Generic;
 using System.Linq;
 using Ubongo.Core;
-using Ubongo.Systems;
+using Ubongo.Domain;
 
 namespace Ubongo
 {

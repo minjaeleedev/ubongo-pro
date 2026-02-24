@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Application.Bootstrap;
+using Ubongo.Domain;
 using Ubongo.Infrastructure.Settings;
 using Ubongo.Systems;
 

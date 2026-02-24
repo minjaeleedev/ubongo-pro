@@ -1,17 +1,19 @@
+using Ubongo.Domain;
+
 namespace Ubongo.Application.Policy
 {
     public static class GameModePolicy
     {
-        public static global::Ubongo.GameMode Normalize(global::Ubongo.GameMode requestedMode)
+        public static GameMode Normalize(GameMode requestedMode)
         {
-            return requestedMode == global::Ubongo.GameMode.Multiplayer
-                ? global::Ubongo.GameMode.Classic
+            return requestedMode == GameMode.Multiplayer
+                ? GameMode.Classic
                 : requestedMode;
         }
 
-        public static bool GetDefaultHintsEnabled(global::Ubongo.GameMode mode)
+        public static bool GetDefaultHintsEnabled(GameMode mode)
         {
-            return mode == global::Ubongo.GameMode.Zen;
+            return mode == GameMode.Zen;
         }
     }
 }

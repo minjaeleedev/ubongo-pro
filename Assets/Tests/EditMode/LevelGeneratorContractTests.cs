@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Core;
-using Ubongo.Systems;
+using Ubongo.Domain;
 using System.Collections.Generic;
 
 namespace Ubongo.Tests.EditMode

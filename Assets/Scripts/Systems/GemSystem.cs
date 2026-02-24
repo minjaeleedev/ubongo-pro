@@ -2,20 +2,10 @@ using UnityEngine;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Ubongo.Domain;
 
 namespace Ubongo.Systems
 {
-    /// <summary>
-    /// 보석 타입 열거형
-    /// </summary>
-    public enum GemType
-    {
-        Ruby,       // 루비 - 4점
-        Sapphire,   // 사파이어 - 3점
-        Emerald,    // 에메랄드 - 2점
-        Amber       // 앰버 - 1점
-    }
-
     /// <summary>
     /// 보석 풀 모드 열거형
     /// </summary>
@@ -216,32 +206,8 @@ namespace Ubongo.Systems
         public Gem(GemType type)
         {
             Type = type;
-            PointValue = GetPointValue(type);
-            Color = GetColor(type);
-        }
-
-        private static int GetPointValue(GemType type)
-        {
-            return type switch
-            {
-                GemType.Ruby => 4,
-                GemType.Sapphire => 3,
-                GemType.Emerald => 2,
-                GemType.Amber => 1,
-                _ => 0
-            };
-        }
-
-        private static Color GetColor(GemType type)
-        {
-            return type switch
-            {
-                GemType.Ruby => new Color(0.9f, 0.1f, 0.1f),      // 빨강
-                GemType.Sapphire => new Color(0.1f, 0.3f, 0.9f),  // 파랑
-                GemType.Emerald => new Color(0.1f, 0.8f, 0.2f),   // 초록
-                GemType.Amber => new Color(1f, 0.75f, 0.2f),      // 호박색
-                _ => Color.white
-            };
+            PointValue = GemDefinitionCatalog.GetPointValue(type);
+            Color = GemDefinitionCatalog.GetColor(type);
         }
     }
 
