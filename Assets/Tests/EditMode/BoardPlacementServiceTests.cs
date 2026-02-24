@@ -11,7 +11,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Validate_OutOfBounds_ReturnsOutOfBounds()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             TargetArea target = TargetArea.CreateRectangular(4, 2);
             BoardPlacementService service = new BoardPlacementService();
 
@@ -26,14 +26,14 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Validate_HeightExceeded_ReturnsHeightExceeded()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             TargetArea target = TargetArea.CreateRectangular(4, 2);
             BoardPlacementService service = new BoardPlacementService();
 
             PlacementValidity result = service.Validate(
                 board,
                 target,
-                new List<Vector3Int> { new Vector3Int(0, 2, 0) });
+                new List<Vector3Int> { new Vector3Int(0, TargetArea.RequiredHeight, 0) });
 
             Assert.AreEqual(PlacementValidity.HeightExceeded, result);
         }
@@ -41,7 +41,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Validate_OutsideTarget_ReturnsOutsideTarget()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             TargetArea target = TargetArea.CreateRectangular(1, 1);
             BoardPlacementService service = new BoardPlacementService();
 
@@ -56,7 +56,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Validate_Collision_ReturnsCollision()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             TargetArea target = TargetArea.CreateRectangular(4, 2);
             BoardPlacementService service = new BoardPlacementService();
             board.TryPlace("piece_a", new List<Vector3Int> { new Vector3Int(0, 0, 0) });
@@ -72,7 +72,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Validate_ValidPlacement_ReturnsValid()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             TargetArea target = TargetArea.CreateRectangular(4, 2);
             BoardPlacementService service = new BoardPlacementService();
 

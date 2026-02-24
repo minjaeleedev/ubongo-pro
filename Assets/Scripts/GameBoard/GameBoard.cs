@@ -30,7 +30,6 @@ namespace Ubongo
 
     public class GameBoard : MonoBehaviour
     {
-        private const int UbongoHeight = 2;
         private const int MinimumBoardDimension = 1;
         private const string BoardLayerName = "Board";
         private const string CellVisualName = "Visual";
@@ -68,7 +67,7 @@ namespace Ubongo
         private bool isConstructed;
 
         public int Width => width;
-        public int Height => UbongoHeight;
+        public int Height => TargetArea.RequiredHeight;
         public int Depth => depth;
         public float CellSize => cellSize;
         public float GridStep => cellSize + cellSpacing;
@@ -102,7 +101,7 @@ namespace Ubongo
             NormalizeBoardDimensions();
             EnsureConstructedOrThrow();
             EnsureBoardState();
-            boardState.Resize(width, UbongoHeight, depth);
+            boardState.Resize(width, TargetArea.RequiredHeight, depth);
             CreateBoardContainer();
             CreateGrid();
             SetupDefaultTargetArea();
@@ -123,7 +122,7 @@ namespace Ubongo
 
         private void CreateGrid()
         {
-            grid = new BoardCell[width, UbongoHeight, depth];
+            grid = new BoardCell[width, TargetArea.RequiredHeight, depth];
             float totalCellSize = cellSize + cellSpacing;
 
             Vector3 startPos = new Vector3(
@@ -134,7 +133,7 @@ namespace Ubongo
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                for (int y = 0; y < TargetArea.RequiredHeight; y++)
                 {
                     for (int z = 0; z < depth; z++)
                     {
@@ -146,7 +145,7 @@ namespace Ubongo
 
                         CreateCell(x, y, z, position);
 
-                        // 2층 셀은 시각적으로 숨김
+                        // Upper layers remain hidden visually.
                         if (y > 0 && grid[x, y, z] != null)
                         {
                             Renderer r = grid[x, y, z].VisualRenderer;
@@ -368,12 +367,13 @@ namespace Ubongo
             EnsureConstructedOrThrow();
             ClearBoard();
 
+            // Y is fixed by domain rule and intentionally ignored.
             Vector2Int normalizedSize = NormalizeBoardSize(size.x, size.z);
             width = normalizedSize.x;
             depth = normalizedSize.y;
 
             EnsureBoardState();
-            boardState.Resize(width, UbongoHeight, depth);
+            boardState.Resize(width, TargetArea.RequiredHeight, depth);
 
             CreateBoardContainer();
             CreateGrid();
@@ -389,7 +389,7 @@ namespace Ubongo
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                for (int y = 0; y < TargetArea.RequiredHeight; y++)
                 {
                     for (int z = 0; z < depth; z++)
                     {
@@ -406,7 +406,7 @@ namespace Ubongo
 
         public BoardCell GetCell(int x, int y, int z)
         {
-            if (x < 0 || x >= width || y < 0 || y >= UbongoHeight || z < 0 || z >= depth)
+            if (x < 0 || x >= width || y < 0 || y >= TargetArea.RequiredHeight || z < 0 || z >= depth)
             {
                 return null;
             }
@@ -427,7 +427,7 @@ namespace Ubongo
         public bool IsWithinBounds(Vector3Int position)
         {
             return position.x >= 0 && position.x < width &&
-                   position.y >= 0 && position.y < UbongoHeight &&
+                   position.y >= 0 && position.y < TargetArea.RequiredHeight &&
                    position.z >= 0 && position.z < depth;
         }
 
@@ -577,7 +577,7 @@ namespace Ubongo
                 // Defensive fallback for legacy states where piece index was not recorded.
                 for (int x = 0; x < width; x++)
                 {
-                    for (int y = 0; y < UbongoHeight; y++)
+                    for (int y = 0; y < TargetArea.RequiredHeight; y++)
                     {
                         for (int z = 0; z < depth; z++)
                         {
@@ -605,7 +605,7 @@ namespace Ubongo
         }
 
         /// <summary>
-        /// Checks the win condition: all target area cells must be filled exactly 2 layers high.
+        /// Checks the win condition: all target area cells must be filled to required height.
         /// </summary>
         private void CheckWinCondition()
         {
@@ -683,7 +683,7 @@ namespace Ubongo
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                for (int y = 0; y < TargetArea.RequiredHeight; y++)
                 {
                     for (int z = 0; z < depth; z++)
                     {
@@ -711,7 +711,7 @@ namespace Ubongo
             {
                 for (int x = 0; x < width; x++)
                 {
-                    for (int y = 0; y < UbongoHeight; y++)
+                    for (int y = 0; y < TargetArea.RequiredHeight; y++)
                     {
                         for (int z = 0; z < depth; z++)
                         {
@@ -732,7 +732,7 @@ namespace Ubongo
         /// </summary>
         public Vector3Int FindLowestValidPosition(PuzzlePiece piece, int gridX, int gridZ)
         {
-            for (int y = 0; y < UbongoHeight; y++)
+            for (int y = 0; y < TargetArea.RequiredHeight; y++)
             {
                 Vector3Int testPos = new Vector3Int(gridX, y, gridZ);
                 if (CanPlacePiece(piece, testPos))
@@ -803,7 +803,7 @@ namespace Ubongo
                 return;
             }
 
-            boardState.Resize(width, UbongoHeight, depth);
+            boardState.Resize(width, TargetArea.RequiredHeight, depth);
 
             if (grid == null)
             {
@@ -815,7 +815,7 @@ namespace Ubongo
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                for (int y = 0; y < TargetArea.RequiredHeight; y++)
                 {
                     for (int z = 0; z < depth; z++)
                     {
@@ -872,7 +872,7 @@ namespace Ubongo
 
             for (int x = 0; x < width; x++)
             {
-                for (int y = 0; y < UbongoHeight; y++)
+                for (int y = 0; y < TargetArea.RequiredHeight; y++)
                 {
                     for (int z = 0; z < depth; z++)
                     {
@@ -918,7 +918,7 @@ namespace Ubongo
                 return;
             }
 
-            boardState = new BoardState(width, UbongoHeight, depth);
+            boardState = new BoardState(width, TargetArea.RequiredHeight, depth);
         }
 
         /// <summary>

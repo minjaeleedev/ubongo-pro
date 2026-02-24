@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using Ubongo.Core;
 using Ubongo.Domain.Board;
 
 namespace Ubongo.Tests.EditMode
@@ -11,7 +12,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void TryPlaceAndRemove_UpdatesOccupancyAndIndex()
         {
-            BoardState board = new BoardState(4, 2, 2);
+            BoardState board = new BoardState(4, TargetArea.RequiredHeight, 2);
             List<Vector3Int> cells = new List<Vector3Int>
             {
                 new Vector3Int(1, 0, 0),
@@ -36,14 +37,14 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void CopyOccupancyTo_CopiesCurrentOccupancy()
         {
-            BoardState board = new BoardState(2, 2, 1);
+            BoardState board = new BoardState(2, TargetArea.RequiredHeight, 1);
             board.TryPlace("piece_a", new List<Vector3Int>
             {
                 new Vector3Int(0, 0, 0),
                 new Vector3Int(1, 1, 0)
             });
 
-            bool[,,] buffer = new bool[2, 2, 1];
+            bool[,,] buffer = new bool[2, TargetArea.RequiredHeight, 1];
             board.CopyOccupancyTo(buffer);
 
             Assert.IsTrue(buffer[0, 0, 0]);
@@ -55,17 +56,17 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void CopyOccupancyTo_DimensionMismatch_ThrowsArgumentException()
         {
-            BoardState board = new BoardState(2, 2, 1);
+            BoardState board = new BoardState(2, TargetArea.RequiredHeight, 1);
 
-            Assert.Throws<ArgumentException>(() => board.CopyOccupancyTo(new bool[1, 2, 1]));
+            Assert.Throws<ArgumentException>(() => board.CopyOccupancyTo(new bool[1, TargetArea.RequiredHeight, 1]));
             Assert.Throws<ArgumentException>(() => board.CopyOccupancyTo(new bool[2, 1, 1]));
-            Assert.Throws<ArgumentException>(() => board.CopyOccupancyTo(new bool[2, 2, 2]));
+            Assert.Throws<ArgumentException>(() => board.CopyOccupancyTo(new bool[2, TargetArea.RequiredHeight, 2]));
         }
 
         [Test]
         public void Resize_WithNonPositiveValues_ClampsToMinimumDimensionOne()
         {
-            BoardState board = new BoardState(2, 2, 2);
+            BoardState board = new BoardState(2, TargetArea.RequiredHeight, 2);
 
             board.Resize(0, -1, 0);
 

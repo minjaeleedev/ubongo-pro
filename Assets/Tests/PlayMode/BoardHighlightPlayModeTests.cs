@@ -312,7 +312,7 @@ namespace Ubongo.Tests.PlayMode
             GameObject boardObject = board.gameObject;
             yield return null;
 
-            board.InitializeGrid(new Vector3Int(6, 2, 3));
+            board.InitializeGrid(new Vector3Int(6, TargetArea.RequiredHeight, 3));
             BoardCell floorCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(floorCell);
             Transform visualTransform = floorCell.transform.Find("Visual");

@@ -7,7 +7,7 @@ namespace Ubongo.Core
 {
     /// <summary>
     /// Defines the target area that must be filled in a puzzle.
-    /// Ubongo 3D requires exactly 2 layers to be filled.
+    /// Ubongo 3D requires a fixed number of layers to be filled.
     /// </summary>
     [Serializable]
     public class TargetArea
@@ -354,7 +354,9 @@ namespace Ubongo.Core
             Layer1FilledCount = layer1Filled;
             TotalTargetCells = totalTarget;
 
-            int targetPerLayer = totalTarget / 2;
+            int targetPerLayer = TargetArea.RequiredHeight > 0
+                ? totalTarget / TargetArea.RequiredHeight
+                : 0;
             Layer0Progress = targetPerLayer > 0 ? (float)layer0Filled / targetPerLayer : 0f;
             Layer1Progress = targetPerLayer > 0 ? (float)layer1Filled / targetPerLayer : 0f;
             TotalProgress = totalTarget > 0 ? (float)(layer0Filled + layer1Filled) / totalTarget : 0f;

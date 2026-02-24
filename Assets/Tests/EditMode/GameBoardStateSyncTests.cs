@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Application.Bootstrap;
+using Ubongo.Core;
 
 namespace Ubongo.Tests.EditMode
 {
@@ -28,7 +29,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameBoard board = CreateBoard();
 
-            board.InitializeGrid(new Vector3Int(0, 2, 0));
+            board.InitializeGrid(new Vector3Int(0, TargetArea.RequiredHeight, 0));
 
             Assert.AreEqual(1, board.Width);
             Assert.AreEqual(1, board.Depth);
@@ -38,10 +39,22 @@ namespace Ubongo.Tests.EditMode
         }
 
         [Test]
+        public void InitializeGrid_IgnoresSizeY_UsesRequiredHeight()
+        {
+            GameBoard board = CreateBoard();
+
+            board.InitializeGrid(new Vector3Int(3, TargetArea.RequiredHeight + 5, 2));
+
+            Assert.AreEqual(TargetArea.RequiredHeight, board.Height);
+            Assert.IsNotNull(board.GetCell(0, TargetArea.RequiredHeight - 1, 0));
+            Assert.IsNull(board.GetCell(0, TargetArea.RequiredHeight, 0));
+        }
+
+        [Test]
         public void RemovePiece_OnlyClearsRequestedPieceCells()
         {
             GameBoard board = CreateBoard();
-            board.InitializeGrid(new Vector3Int(4, 2, 2));
+            board.InitializeGrid(new Vector3Int(4, TargetArea.RequiredHeight, 2));
 
             PuzzlePiece pieceA = CreatePiece("PieceA", new List<Vector3Int>
             {
@@ -83,7 +96,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameBoard board = CreateUninitializedBoard();
 
-            Assert.Throws<InvalidOperationException>(() => board.InitializeGrid(new Vector3Int(1, 2, 1)));
+            Assert.Throws<InvalidOperationException>(() => board.InitializeGrid(new Vector3Int(1, TargetArea.RequiredHeight, 1)));
         }
 
         [Test]
@@ -101,7 +114,7 @@ namespace Ubongo.Tests.EditMode
             GameBoard board = CreateUninitializedBoard();
             board.Construct(BoardRuntimeServices.CreateDefault());
 
-            board.InitializeGrid(new Vector3Int(1, 2, 1));
+            board.InitializeGrid(new Vector3Int(1, TargetArea.RequiredHeight, 1));
 
             Assert.IsTrue(board.IsConstructed);
             Assert.IsNotNull(board.GetCell(0, 0, 0));

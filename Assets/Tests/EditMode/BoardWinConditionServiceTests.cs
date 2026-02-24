@@ -11,7 +11,7 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void CalculateFillState_MatchesExpectedProgress()
         {
-            BoardState board = new BoardState(1, 2, 1);
+            BoardState board = new BoardState(1, TargetArea.RequiredHeight, 1);
             TargetArea target = TargetArea.CreateRectangular(1, 1);
             BoardWinConditionService service = new BoardWinConditionService();
 
@@ -27,14 +27,14 @@ namespace Ubongo.Tests.EditMode
 
             Assert.AreEqual(1, fill.Layer0FilledCount);
             Assert.AreEqual(1, fill.Layer1FilledCount);
-            Assert.AreEqual(2, fill.TotalTargetCells);
+            Assert.AreEqual(target.TotalCells, fill.TotalTargetCells);
             Assert.IsTrue(fill.IsComplete);
         }
 
         [Test]
         public void ValidateSolution_WhenComplete_ReturnsSolved()
         {
-            BoardState board = new BoardState(1, 2, 1);
+            BoardState board = new BoardState(1, TargetArea.RequiredHeight, 1);
             TargetArea target = TargetArea.CreateRectangular(1, 1);
             BoardWinConditionService service = new BoardWinConditionService();
 

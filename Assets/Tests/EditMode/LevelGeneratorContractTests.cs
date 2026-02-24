@@ -3,6 +3,7 @@ using UnityEngine;
 using Ubongo.Core;
 using Ubongo.Domain;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Ubongo.Tests.EditMode
 {
@@ -33,6 +34,7 @@ namespace Ubongo.Tests.EditMode
             Assert.AreEqual(DifficultyLevel.Easy, generator.CurrentLevelData.Difficulty);
             Assert.IsNotNull(generator.CurrentLevelData.Pieces);
             Assert.Greater(generator.CurrentLevelData.Pieces.Count, 0);
+            Assert.AreEqual(TargetArea.RequiredHeight, generator.CurrentLevelData.BoardSize.y);
 
             UnityEngine.Object.DestroyImmediate(generatorObject);
         }
@@ -76,7 +78,7 @@ namespace Ubongo.Tests.EditMode
                 Difficulty = DifficultyLevel.Hard,
                 TimeLimit = 30f,
                 Pieces = new List<PieceDefinition>(),
-                BoardSize = new Vector3Int(2, 2, 1),
+                BoardSize = new Vector3Int(2, TargetArea.RequiredHeight, 1),
                 TargetArea = TargetArea.CreateRectangular(2, 1),
                 SolutionPlacements = new List<SolutionPlacement>()
             };
@@ -121,6 +123,27 @@ namespace Ubongo.Tests.EditMode
             UnityEngine.Object.DestroyImmediate(generatorObject);
         }
 
+        [Test]
+        public void TryCreateLevelData_WhenSuccessful_UsesRequiredHeightInBoardSize()
+        {
+            GameObject generatorObject = new GameObject("LevelGenerator_Test");
+            LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
+
+            bool generated = false;
+            LevelData levelData = null;
+            for (int attempt = 0; attempt < 3 && !generated; attempt++)
+            {
+                generated = generator.TryCreateLevelData(1, DifficultyLevel.Easy, out levelData);
+            }
+
+            Assert.IsTrue(generated, "Expected level generation to succeed for Easy difficulty.");
+            Assert.IsNotNull(levelData);
+            Assert.AreEqual(TargetArea.RequiredHeight, levelData.BoardSize.y);
+            Assert.AreEqual(levelData.TargetArea.TotalCells, levelData.Pieces.Sum(p => p.BlockCount));
+
+            UnityEngine.Object.DestroyImmediate(generatorObject);
+        }
+
         private static LevelData CreateManualLevelData(DifficultyLevel difficulty, int levelNumber)
         {
             return new LevelData
@@ -129,7 +152,7 @@ namespace Ubongo.Tests.EditMode
                 Difficulty = difficulty,
                 TimeLimit = LevelDifficultyConfig.GetConfig(difficulty).TimeLimit,
                 Pieces = new List<PieceDefinition> { PieceCatalog.Tower },
-                BoardSize = new Vector3Int(2, 2, 1),
+                BoardSize = new Vector3Int(2, TargetArea.RequiredHeight, 1),
                 TargetArea = TargetArea.CreateRectangular(2, 1),
                 SolutionPlacements = new List<SolutionPlacement>()
             };

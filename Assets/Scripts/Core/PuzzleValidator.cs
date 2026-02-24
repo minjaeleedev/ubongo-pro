@@ -195,11 +195,9 @@ namespace Ubongo.Core
     /// </summary>
     public class PuzzleValidator
     {
-        private const int MaxHeight = 2;
-
         /// <summary>
         /// Validates a complete puzzle solution.
-        /// Checks that all target area cells are filled exactly 2 layers high.
+        /// Checks that all target area cells are filled to required height.
         /// </summary>
         /// <param name="occupancyGrid">3D array indicating occupied cells [x, y, z]</param>
         /// <param name="target">The target area that must be filled</param>
@@ -253,13 +251,13 @@ namespace Ubongo.Core
                         $"Layer 1 at ({x}, {z}) is not filled");
                 }
 
-                // Check no blocks above layer 1 (y >= 2)
-                for (int y = MaxHeight; y < gridHeight; y++)
+                // Check no blocks above required height.
+                for (int y = TargetArea.RequiredHeight; y < gridHeight; y++)
                 {
                     if (occupancyGrid[x, y, z])
                     {
                         result.AddError(ValidationError.ExceedsHeight, new Vector3Int(x, y, z),
-                            $"Block at ({x}, {y}, {z}) exceeds maximum height of {MaxHeight}");
+                            $"Block at ({x}, {y}, {z}) exceeds maximum height of {TargetArea.RequiredHeight}");
                     }
                 }
             }
@@ -303,10 +301,10 @@ namespace Ubongo.Core
                 }
 
                 // Check height constraint
-                if (block.y >= MaxHeight)
+                if (block.y >= TargetArea.RequiredHeight)
                 {
                     result.AddError(ValidationError.ExceedsHeight, block,
-                        $"Block at ({block.x}, {block.y}, {block.z}) exceeds height limit of {MaxHeight}");
+                        $"Block at ({block.x}, {block.y}, {block.z}) exceeds height limit of {TargetArea.RequiredHeight}");
                 }
 
                 // Check target area
@@ -328,7 +326,7 @@ namespace Ubongo.Core
         }
 
         /// <summary>
-        /// Checks if the target area is completely filled with exactly 2 layers.
+        /// Checks if the target area is completely filled to required height.
         /// </summary>
         public bool IsAreaCompletelyFilled(bool[,,] occupancyGrid, TargetArea target)
         {
@@ -422,7 +420,7 @@ namespace Ubongo.Core
                 }
 
                 // Check height constraint
-                if (worldPos.y >= MaxHeight)
+                if (worldPos.y >= TargetArea.RequiredHeight)
                 {
                     return false;
                 }
@@ -465,7 +463,7 @@ namespace Ubongo.Core
                     return false;
                 }
 
-                if (worldPos.y < 0 || worldPos.y >= MaxHeight)
+                if (worldPos.y < 0 || worldPos.y >= TargetArea.RequiredHeight)
                 {
                     return false;
                 }

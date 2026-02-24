@@ -105,7 +105,9 @@ namespace Ubongo
     public class LevelGenerator : MonoBehaviour
     {
         private const int MinGenerationAttempts = 1;
-        private const int MaxHeight = 2;
+        private const int DefaultFootprintDepth = 2;
+        private const int MinFootprintDepth = 2;
+        private const int MaxFootprintDepth = 4;
         private const string PieceLayerName = "Piece";
 
         [Header("Piece Spawn Settings")]
@@ -269,13 +271,13 @@ namespace Ubongo
                 }
 
                 int totalBlocks = selectedPieces.Sum(p => p.BlockCount);
-                if (totalBlocks <= 0 || totalBlocks % MaxHeight != 0)
+                if (totalBlocks <= 0 || totalBlocks % TargetArea.RequiredHeight != 0)
                 {
                     continue;
                 }
 
-                // Calculate target area dimensions (must fit 2 layers exactly)
-                int footprintSize = totalBlocks / MaxHeight;
+                // Calculate target area dimensions (must fit required height exactly).
+                int footprintSize = totalBlocks / TargetArea.RequiredHeight;
                 TargetArea targetArea = CalculateTargetArea(footprintSize, difficulty);
                 if (targetArea == null || targetArea.TotalCells != totalBlocks)
                 {
@@ -366,21 +368,20 @@ namespace Ubongo
         /// </summary>
         private TargetArea CalculateTargetArea(int footprintSize, DifficultyLevel difficulty)
         {
-            // Determine width and depth based on footprint size
-            // For Ubongo 3D, standard depth is 2
-            int depth = 2;
-            int width = Mathf.CeilToInt((float)footprintSize / depth);
+            // Determine footprint width/depth (XZ plane) based on footprint size.
+            int footprintDepth = DefaultFootprintDepth;
+            int width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
 
             // Adjust if necessary to match exact footprint
-            if (width * depth != footprintSize)
+            if (width * footprintDepth != footprintSize)
             {
                 // Try different configurations
-                for (int d = 2; d <= 4; d++)
+                for (int candidateDepth = MinFootprintDepth; candidateDepth <= MaxFootprintDepth; candidateDepth++)
                 {
-                    if (footprintSize % d == 0)
+                    if (footprintSize % candidateDepth == 0)
                     {
-                        depth = d;
-                        width = footprintSize / d;
+                        footprintDepth = candidateDepth;
+                        width = footprintSize / candidateDepth;
                         break;
                     }
                 }
@@ -388,11 +389,11 @@ namespace Ubongo
 
             return difficulty switch
             {
-                DifficultyLevel.Easy => TargetArea.CreateRectangular(width, depth),
-                DifficultyLevel.Medium => TargetArea.CreateRectangular(width, depth),
+                DifficultyLevel.Easy => TargetArea.CreateRectangular(width, footprintDepth),
+                DifficultyLevel.Medium => TargetArea.CreateRectangular(width, footprintDepth),
                 DifficultyLevel.Hard => CreateVariedTargetArea(footprintSize),
                 DifficultyLevel.Expert => CreateVariedTargetArea(footprintSize),
-                _ => TargetArea.CreateRectangular(width, depth)
+                _ => TargetArea.CreateRectangular(width, footprintDepth)
             };
         }
 
@@ -414,17 +415,17 @@ namespace Ubongo
 
         private TargetArea CreateRectangularArea(int footprintSize)
         {
-            int depth = 2;
-            int width = Mathf.CeilToInt((float)footprintSize / depth);
+            int footprintDepth = DefaultFootprintDepth;
+            int width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
 
             // Adjust to match exact footprint
-            while (width * depth < footprintSize && depth < 4)
+            while (width * footprintDepth < footprintSize && footprintDepth < MaxFootprintDepth)
             {
-                depth++;
-                width = Mathf.CeilToInt((float)footprintSize / depth);
+                footprintDepth++;
+                width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
             }
 
-            return TargetArea.CreateRectangular(width, depth);
+            return TargetArea.CreateRectangular(width, footprintDepth);
         }
 
         private TargetArea CreateLShapedArea(int footprintSize)
@@ -479,7 +480,7 @@ namespace Ubongo
                 return false;
             }
 
-            var board = new bool[targetArea.Width + 4, MaxHeight, targetArea.Depth + 4];
+            var board = new bool[targetArea.Width + 4, TargetArea.RequiredHeight, targetArea.Depth + 4];
             var workingPlacements = new List<SolutionPlacement>(pieces.Count);
 
             if (!TrySolve(board, pieces, 0, targetArea, workingPlacements))
@@ -520,7 +521,7 @@ namespace Ubongo
 
                 foreach (var column in targetArea.GetColumnPositions())
                 {
-                    for (int y = 0; y < MaxHeight; y++)
+                    for (int y = 0; y < TargetArea.RequiredHeight; y++)
                     {
                         Vector3Int position = new Vector3Int(column.x, y, column.y);
 
@@ -552,7 +553,7 @@ namespace Ubongo
 
                 // Check bounds
                 if (worldPos.x < 0 || worldPos.x >= board.GetLength(0) ||
-                    worldPos.y < 0 || worldPos.y >= MaxHeight ||
+                    worldPos.y < 0 || worldPos.y >= TargetArea.RequiredHeight ||
                     worldPos.z < 0 || worldPos.z >= board.GetLength(2))
                 {
                     return false;
@@ -590,7 +591,7 @@ namespace Ubongo
         {
             return new Vector3Int(
                 targetArea.Width,
-                MaxHeight,
+                TargetArea.RequiredHeight,
                 targetArea.Depth
             );
         }
