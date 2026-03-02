@@ -1,13 +1,7 @@
 {
-    "name": "Ubongo.Presentation",
-    "rootNamespace": "Ubongo",
-    "references": [
-        "Ubongo.Domain",
-        "Ubongo.Application",
-        "Ubongo.Infrastructure",
-        "UnityEngine.UI",
-        "Unity.InputSystem"
-    ],
+    "name": "Ubongo.Domain",
+    "rootNamespace": "Ubongo.Domain",
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
