@@ -145,17 +145,20 @@ namespace Ubongo.Systems
         {
             get
             {
-                if (_instance == null)
+                if (_instance != null)
                 {
-                    _instance = FindAnyObjectByType<DifficultySystem>();
-                    if (_instance == null)
-                    {
-                        var go = new GameObject("DifficultySystem");
-                        _instance = go.AddComponent<DifficultySystem>();
-                    }
+                    return _instance;
                 }
+
+                _instance = FindAnyObjectByType<DifficultySystem>();
                 return _instance;
             }
+        }
+
+        public static bool TryGetExistingInstance(out DifficultySystem difficultySystem)
+        {
+            difficultySystem = Instance;
+            return difficultySystem != null;
         }
 
         [Header("Difficulty Settings")]
@@ -183,13 +186,6 @@ namespace Ubongo.Systems
                 return;
             }
             _instance = this;
-
-            // DontDestroyOnLoad은 루트 오브젝트에만 적용 가능
-            if (transform.parent != null)
-            {
-                transform.SetParent(null);
-            }
-            DontDestroyOnLoad(gameObject);
 
             InitializeDifficultySystem();
         }
@@ -351,6 +347,14 @@ namespace Ubongo.Systems
         public string GetDifficultyDisplayName(DifficultyLevel level)
         {
             return GetDifficultyConfig(level).DisplayName;
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this)
+            {
+                _instance = null;
+            }
         }
     }
 }
