@@ -1,37 +1,22 @@
 using NUnit.Framework;
-using UnityEngine;
 using Ubongo.Application.Formatting;
-using Ubongo.Domain;
-using Ubongo.Systems;
 
 namespace Ubongo.Tests.EditMode
 {
     public class DifficultyDisplayFormatterTests
     {
         [Test]
-        public void Format_WithDefaultConfig_ReturnsExpectedText()
+        public void Format_WithDefaultValues_ReturnsExpectedText()
         {
-            DifficultyConfig config = DifficultyConfig.CreateDefault(DifficultyLevel.Medium);
-
-            string text = DifficultyDisplayFormatter.Format(config);
+            string text = DifficultyDisplayFormatter.Format("Medium", 4);
 
             Assert.AreEqual("Medium (4 pieces)", text);
         }
 
         [Test]
-        public void Format_WithCustomConfig_ReturnsDisplayNameAndPieceCount()
+        public void Format_WithCustomValues_ReturnsDisplayNameAndPieceCount()
         {
-            DifficultyConfig config = new DifficultyConfig(
-                level: DifficultyLevel.Expert,
-                displayName: "Master",
-                displayColor: Color.magenta,
-                pieceCount: 7,
-                boardSize: new Vector2Int(5, 5),
-                timeLimit: 30f,
-                solutionCount: 1,
-                scoreMultiplier: 3f);
-
-            string text = DifficultyDisplayFormatter.Format(config);
+            string text = DifficultyDisplayFormatter.Format("Master", 7);
 
             Assert.AreEqual("Master (7 pieces)", text);
         }
