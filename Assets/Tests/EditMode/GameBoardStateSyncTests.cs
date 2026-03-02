@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
-using Ubongo.Application.Bootstrap;
 using Ubongo.Core;
 
 namespace Ubongo.Tests.EditMode
@@ -123,7 +122,11 @@ namespace Ubongo.Tests.EditMode
         private GameBoard CreateBoard()
         {
             GameBoard board = CreateUninitializedBoard();
-            GameBoardFactory.EnsureConstructed(board);
+            if (!board.IsConstructed)
+            {
+                board.Construct(BoardRuntimeServices.CreateDefault());
+            }
+
             return board;
         }
 
