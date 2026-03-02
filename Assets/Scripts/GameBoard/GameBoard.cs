@@ -621,7 +621,6 @@ namespace Ubongo
             if (result.IsSolved)
             {
                 OnPuzzleSolved?.Invoke();
-                GameManager.Instance.CompleteLevel();
             }
         }
 

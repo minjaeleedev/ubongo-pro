@@ -147,7 +147,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01614664b831546d2ae94a42149d80ac, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.InputSystem.UI::UnityEngine.InputSystem.UI.InputSystemUIInputModule
   m_SendPointerHoverToParent: 1
   m_MoveRepeatDelay: 0.5
@@ -177,7 +177,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
   m_FirstSelected: {fileID: 0}
   m_sendNavigationEvents: 1
@@ -1803,8 +1803,62 @@ Transform:
   - {fileID: 980175018}
   - {fileID: 554211111}
   - {fileID: 1812507264}
+  - {fileID: 2000000002}
+  - {fileID: 2100000002}
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &2000000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2000000002}
+  - component: {fileID: 2000000003}
+  m_Layer: 0
+  m_Name: GameCompositionRoot
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2000000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 909160078}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2000000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2000000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a547e7896c6849bf81b7db0d2049f513, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Ubongo.Bootstrap::Ubongo.Application.Bootstrap.GameCompositionRoot
+  gameManager: {fileID: 1756771394}
+  roundManager: {fileID: 980175019}
+  gemSystem: {fileID: 161205681}
+  difficultySystem: {fileID: 554211112}
+  tiebreakerManager: {fileID: 1812507265}
+  inputManager: {fileID: 2100000003}
+  levelGenerator: {fileID: 552195507}
+  gameBoard: {fileID: 0}
 --- !u!1 &936438602
 GameObject:
   m_ObjectHideFlags: 0
@@ -2052,6 +2106,59 @@ MonoBehaviour:
   totalRounds: 9
   transitionDelay: 2
   enableSecondChance: 1
+  difficultySystem: {fileID: 554211112}
+  gemSystem: {fileID: 161205681}
+--- !u!1 &2100000001
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 2100000002}
+  - component: {fileID: 2100000003}
+  m_Layer: 0
+  m_Name: InputManager
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &2100000002
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000001}
+  serializedVersion: 2
+  m_LocalRotation: {x: -0, y: -0, z: -0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 909160078}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &2100000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2100000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 2a3b4c5d6e7f89012345678901abcdef, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Ubongo.Runtime::Ubongo.InputManager
+  pieceLayerMask:
+    serializedVersion: 2
+    m_Bits: -1
+  boardLayerMask:
+    serializedVersion: 2
+    m_Bits: -1
+  dragHeight: 0.5
 --- !u!1 &1015336584
 GameObject:
   m_ObjectHideFlags: 0
@@ -3586,7 +3693,7 @@ MonoBehaviour:
   roundManager: {fileID: 980175019}
   difficultySystem: {fileID: 554211112}
   tiebreakerManager: {fileID: 1812507265}
-  levelGenerator: {fileID: 0}
+  levelGenerator: {fileID: 552195507}
   gameBoard: {fileID: 0}
 --- !u!4 &1756771395
 Transform:

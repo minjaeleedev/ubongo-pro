@@ -1,12 +1,11 @@
 {
-    "name": "Ubongo.Presentation",
-    "rootNamespace": "Ubongo",
+    "name": "Ubongo.Bootstrap",
+    "rootNamespace": "Ubongo.Application.Bootstrap",
     "references": [
-        "Ubongo.Domain",
-        "Ubongo.Application",
+        "Ubongo.Presentation",
         "Ubongo.Infrastructure",
-        "UnityEngine.UI",
-        "Unity.InputSystem"
+        "Ubongo.Application",
+        "Ubongo.Domain"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

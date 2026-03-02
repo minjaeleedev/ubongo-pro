@@ -5,7 +5,6 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Ubongo.Core;
-using Ubongo.Application.Bootstrap;
 
 namespace Ubongo.Tests.PlayMode
 {
@@ -336,7 +335,7 @@ namespace Ubongo.Tests.PlayMode
         {
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
-            GameBoardFactory.EnsureConstructed(board);
+            board.Construct(BoardRuntimeServices.CreateDefault());
             return board;
         }
 
