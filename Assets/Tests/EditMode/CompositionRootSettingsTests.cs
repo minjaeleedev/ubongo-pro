@@ -1,5 +1,7 @@
 using NUnit.Framework;
+using System.Text.RegularExpressions;
 using UnityEngine;
+using UnityEngine.TestTools;
 using Ubongo.Application.Bootstrap;
 using Ubongo.Domain;
 using Ubongo.Infrastructure.Settings;
@@ -99,6 +101,98 @@ namespace Ubongo.Tests.EditMode
             UnityEngine.Object.DestroyImmediate(managerObject);
         }
 
+        [Test]
+        public void GameManager_TryGetExistingInstance_WhenMissing_ReturnsFalse()
+        {
+            bool found = GameManager.TryGetExistingInstance(out GameManager manager);
+
+            Assert.IsFalse(found);
+            Assert.IsNull(manager);
+        }
+
+        [Test]
+        public void RoundManager_TryFailCurrentRound_WhenNotInProgress_ReturnsFalse()
+        {
+            GameObject roundObject = new GameObject("RoundManager_Test");
+            RoundManager roundManager = roundObject.AddComponent<RoundManager>();
+
+            bool failed = roundManager.TryFailCurrentRound();
+
+            Assert.IsFalse(failed);
+            UnityEngine.Object.DestroyImmediate(roundObject);
+        }
+
+        [Test]
+        public void GameCompositionRoot_Awake_WithoutUIManager_FailsFast()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            managerObject.AddComponent<GameManager>();
+            GameObject roundObject = new GameObject("RoundManager_Test");
+            roundObject.AddComponent<RoundManager>();
+            GameObject gemObject = new GameObject("GemSystem_Test");
+            gemObject.AddComponent<GemSystem>();
+            GameObject difficultyObject = new GameObject("DifficultySystem_Test");
+            difficultyObject.AddComponent<DifficultySystem>();
+            GameObject tiebreakerObject = new GameObject("TiebreakerManager_Test");
+            tiebreakerObject.AddComponent<TiebreakerManager>();
+            GameObject inputObject = new GameObject("InputManager_Test");
+            inputObject.AddComponent<InputManager>();
+            GameObject levelGeneratorObject = new GameObject("LevelGenerator_Test");
+            levelGeneratorObject.AddComponent<LevelGenerator>();
+
+            LogAssert.Expect(LogType.Error, "[GameCompositionRoot] Expected exactly one UIManager in scene, but found 0.");
+            LogAssert.Expect(LogType.Exception, new Regex(@"\[GameCompositionRoot\] Runtime graph validation failed"));
+
+            GameObject rootObject = new GameObject("GameCompositionRoot_Test");
+            rootObject.AddComponent<GameCompositionRoot>();
+
+            UnityEngine.Object.DestroyImmediate(rootObject);
+            UnityEngine.Object.DestroyImmediate(levelGeneratorObject);
+            UnityEngine.Object.DestroyImmediate(inputObject);
+            UnityEngine.Object.DestroyImmediate(tiebreakerObject);
+            UnityEngine.Object.DestroyImmediate(difficultyObject);
+            UnityEngine.Object.DestroyImmediate(gemObject);
+            UnityEngine.Object.DestroyImmediate(roundObject);
+            UnityEngine.Object.DestroyImmediate(managerObject);
+        }
+
+        [Test]
+        public void GameCompositionRoot_Awake_WithoutGameBoard_FailsFast()
+        {
+            GameObject managerObject = new GameObject("GameManager_Test");
+            managerObject.AddComponent<GameManager>();
+            GameObject roundObject = new GameObject("RoundManager_Test");
+            roundObject.AddComponent<RoundManager>();
+            GameObject gemObject = new GameObject("GemSystem_Test");
+            gemObject.AddComponent<GemSystem>();
+            GameObject difficultyObject = new GameObject("DifficultySystem_Test");
+            difficultyObject.AddComponent<DifficultySystem>();
+            GameObject tiebreakerObject = new GameObject("TiebreakerManager_Test");
+            tiebreakerObject.AddComponent<TiebreakerManager>();
+            GameObject inputObject = new GameObject("InputManager_Test");
+            inputObject.AddComponent<InputManager>();
+            GameObject levelGeneratorObject = new GameObject("LevelGenerator_Test");
+            levelGeneratorObject.AddComponent<LevelGenerator>();
+            GameObject uiObject = new GameObject("UIManager_Test");
+            uiObject.AddComponent<UIManager>();
+
+            LogAssert.Expect(LogType.Error, "[GameCompositionRoot] Expected exactly one GameBoard in scene, but found 0.");
+            LogAssert.Expect(LogType.Exception, new Regex(@"\[GameCompositionRoot\] Runtime graph validation failed"));
+
+            GameObject rootObject = new GameObject("GameCompositionRoot_Test");
+            rootObject.AddComponent<GameCompositionRoot>();
+
+            UnityEngine.Object.DestroyImmediate(rootObject);
+            UnityEngine.Object.DestroyImmediate(uiObject);
+            UnityEngine.Object.DestroyImmediate(levelGeneratorObject);
+            UnityEngine.Object.DestroyImmediate(inputObject);
+            UnityEngine.Object.DestroyImmediate(tiebreakerObject);
+            UnityEngine.Object.DestroyImmediate(difficultyObject);
+            UnityEngine.Object.DestroyImmediate(gemObject);
+            UnityEngine.Object.DestroyImmediate(roundObject);
+            UnityEngine.Object.DestroyImmediate(managerObject);
+        }
+
         private static void CleanupRuntimeSingletonObjects()
         {
             DestroyAllComponents<GameCompositionRoot>();
@@ -110,6 +204,7 @@ namespace Ubongo.Tests.EditMode
             DestroyAllComponents<GemSystem>();
             DestroyAllComponents<DifficultySystem>();
             DestroyAllComponents<TiebreakerManager>();
+            DestroyAllComponents<UIManager>();
         }
 
         private static void DestroyAllComponents<T>() where T : Component
