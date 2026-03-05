@@ -7,7 +7,6 @@ using Ubongo.Domain;
 using Ubongo.Application.Flow;
 using Ubongo.Application.Policy;
 using Ubongo.Infrastructure.Settings;
-using Ubongo.Application.Bootstrap;
 
 namespace Ubongo
 {
@@ -24,17 +23,32 @@ namespace Ubongo
         {
             get
             {
-                if (_instance == null)
+                if (_instance != null)
                 {
-                    _instance = FindAnyObjectByType<GameManager>();
-                    if (_instance == null)
-                    {
-                        var go = new GameObject("GameManager");
-                        _instance = go.AddComponent<GameManager>();
-                    }
+                    return _instance;
                 }
+
+                _instance = FindAnyObjectByType<GameManager>();
                 return _instance;
             }
+        }
+
+        public static bool TryGetExistingInstance(out GameManager manager)
+        {
+            manager = _instance;
+            if (manager != null)
+            {
+                return true;
+            }
+
+            manager = FindAnyObjectByType<GameManager>();
+            if (manager != null)
+            {
+                _instance = manager;
+                return true;
+            }
+
+            return false;
         }
 
         [Header("Game Settings")]
@@ -63,6 +77,7 @@ namespace Ubongo
         [SerializeField] private TiebreakerManager tiebreakerManager;
         [SerializeField] private LevelGenerator levelGenerator;
         [SerializeField] private GameBoard gameBoard;
+        [SerializeField] private InputManager inputManager;
 
         private GameState _currentState = GameState.Menu;
         private int _bonusScore = 0;
@@ -71,6 +86,8 @@ namespace Ubongo
         private Coroutine solutionPreviewCoroutine;
         private ISettingsStore settingsStore;
         private bool hasInjectedSettingsStore;
+        private bool hasConfiguredRuntimeDependencies;
+        private GameBoard subscribedGameBoard;
 
         // Events
         public event Action<GameState> OnGameStateChanged;
@@ -136,15 +153,14 @@ namespace Ubongo
                 return;
             }
             _instance = this;
-            DontDestroyOnLoad(gameObject);
 
             EnsureSettingsStore();
             LoadSolutionRevealOption();
-            InitializeSystemReferences();
         }
 
         private void Start()
         {
+            EnsureRuntimeDependenciesConfigured();
             SetupCamera();
             SubscribeToEvents();
 #if UNITY_EDITOR
@@ -153,6 +169,45 @@ namespace Ubongo
                 StartGame(DifficultyLevel.Easy);
             }
 #endif
+        }
+
+        public void ConfigureRuntimeDependencies(
+            GemSystem configuredGemSystem,
+            RoundManager configuredRoundManager,
+            DifficultySystem configuredDifficultySystem,
+            TiebreakerManager configuredTiebreakerManager,
+            LevelGenerator configuredLevelGenerator,
+            GameBoard configuredGameBoard,
+            InputManager configuredInputManager)
+        {
+            gemSystem = configuredGemSystem ?? throw new ArgumentNullException(nameof(configuredGemSystem));
+            roundManager = configuredRoundManager ?? throw new ArgumentNullException(nameof(configuredRoundManager));
+            difficultySystem = configuredDifficultySystem ?? throw new ArgumentNullException(nameof(configuredDifficultySystem));
+            tiebreakerManager = configuredTiebreakerManager ?? throw new ArgumentNullException(nameof(configuredTiebreakerManager));
+            levelGenerator = configuredLevelGenerator ?? throw new ArgumentNullException(nameof(configuredLevelGenerator));
+            gameBoard = configuredGameBoard ?? throw new ArgumentNullException(nameof(configuredGameBoard));
+            inputManager = configuredInputManager ?? throw new ArgumentNullException(nameof(configuredInputManager));
+
+            hasConfiguredRuntimeDependencies = true;
+            SubscribeToBoardEvents(gameBoard);
+        }
+
+        private void EnsureRuntimeDependenciesConfigured()
+        {
+            if (hasConfiguredRuntimeDependencies)
+            {
+                if (!gameBoard.IsConstructed)
+                {
+                    throw new InvalidOperationException(
+                        $"[{nameof(GameManager)}] GameBoard is not constructed. Configure board runtime services in GameCompositionRoot.");
+                }
+
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(GameManager)}] Runtime dependencies are not configured. " +
+                "Initialize through GameCompositionRoot.");
         }
 
         private void SetupCamera()
@@ -170,65 +225,70 @@ namespace Ubongo
             cam.clearFlags = CameraClearFlags.SolidColor;
         }
 
-        private void InitializeSystemReferences()
+        private void SubscribeToBoardEvents(GameBoard board)
         {
-            // 항상 싱글톤 Instance를 사용하여 일관성 보장
-            // Inspector 할당값보다 Instance를 우선하여 이벤트 구독 불일치 방지
-            gemSystem = GemSystem.Instance;
-            roundManager = RoundManager.Instance;
-            difficultySystem = DifficultySystem.Instance;
-            tiebreakerManager = TiebreakerManager.Instance;
-
-            // LevelGenerator와 GameBoard는 씬에서 찾기
-            levelGenerator = FindAnyObjectByType<LevelGenerator>();
-            GameBoard existingBoard = gameBoard != null ? gameBoard : FindAnyObjectByType<GameBoard>();
-            gameBoard = GameBoardFactory.ResolveOrCreate(existingBoard);
-
-            // InputManager가 없으면 동적 생성
-            if (InputManager.Instance == null)
+            if (board == null)
             {
-                var inputManagerObject = new GameObject("InputManager");
-                inputManagerObject.AddComponent<InputManager>();
+                return;
             }
+
+            if (subscribedGameBoard == board)
+            {
+                return;
+            }
+
+            UnsubscribeFromBoardEvents();
+            subscribedGameBoard = board;
+            subscribedGameBoard.OnPuzzleSolved += HandleBoardPuzzleSolved;
+        }
+
+        private void UnsubscribeFromBoardEvents()
+        {
+            if (subscribedGameBoard == null)
+            {
+                return;
+            }
+
+            subscribedGameBoard.OnPuzzleSolved -= HandleBoardPuzzleSolved;
+            subscribedGameBoard = null;
         }
 
         private void SubscribeToEvents()
         {
-            if (RoundManager != null)
-            {
-                RoundManager.OnRoundStarting += HandleRoundStarting;
-                RoundManager.OnRoundStarted += HandleRoundStarted;
-                RoundManager.OnRoundCompleted += HandleRoundCompleted;
-                RoundManager.OnRoundFailed += HandleRoundFailed;
-                RoundManager.OnGameCompleted += HandleGameCompleted;
-                RoundManager.OnSecondChanceStarted += HandleSecondChanceStarted;
-                RoundManager.OnRoundTimeUpdated += HandleTimeUpdated;
-            }
+            roundManager.OnRoundStarting += HandleRoundStarting;
+            roundManager.OnRoundStarted += HandleRoundStarted;
+            roundManager.OnRoundCompleted += HandleRoundCompleted;
+            roundManager.OnRoundFailed += HandleRoundFailed;
+            roundManager.OnGameCompleted += HandleGameCompleted;
+            roundManager.OnSecondChanceStarted += HandleSecondChanceStarted;
+            roundManager.OnRoundTimeUpdated += HandleTimeUpdated;
 
-            if (TiebreakerManager != null)
-            {
-                TiebreakerManager.OnTiebreakerStarting += HandleTiebreakerStarting;
-                TiebreakerManager.OnTiebreakerEnded += HandleTiebreakerEnded;
-            }
+            tiebreakerManager.OnTiebreakerStarting += HandleTiebreakerStarting;
+            tiebreakerManager.OnTiebreakerEnded += HandleTiebreakerEnded;
         }
 
         private void UnsubscribeFromEvents()
         {
-            if (RoundManager != null)
+            if (!hasConfiguredRuntimeDependencies)
             {
-                RoundManager.OnRoundStarting -= HandleRoundStarting;
-                RoundManager.OnRoundStarted -= HandleRoundStarted;
-                RoundManager.OnRoundCompleted -= HandleRoundCompleted;
-                RoundManager.OnRoundFailed -= HandleRoundFailed;
-                RoundManager.OnGameCompleted -= HandleGameCompleted;
-                RoundManager.OnSecondChanceStarted -= HandleSecondChanceStarted;
-                RoundManager.OnRoundTimeUpdated -= HandleTimeUpdated;
+                return;
             }
 
-            if (TiebreakerManager != null)
+            if (roundManager != null)
             {
-                TiebreakerManager.OnTiebreakerStarting -= HandleTiebreakerStarting;
-                TiebreakerManager.OnTiebreakerEnded -= HandleTiebreakerEnded;
+                roundManager.OnRoundStarting -= HandleRoundStarting;
+                roundManager.OnRoundStarted -= HandleRoundStarted;
+                roundManager.OnRoundCompleted -= HandleRoundCompleted;
+                roundManager.OnRoundFailed -= HandleRoundFailed;
+                roundManager.OnGameCompleted -= HandleGameCompleted;
+                roundManager.OnSecondChanceStarted -= HandleSecondChanceStarted;
+                roundManager.OnRoundTimeUpdated -= HandleTimeUpdated;
+            }
+
+            if (tiebreakerManager != null)
+            {
+                tiebreakerManager.OnTiebreakerStarting -= HandleTiebreakerStarting;
+                tiebreakerManager.OnTiebreakerEnded -= HandleTiebreakerEnded;
             }
         }
 
@@ -308,16 +368,8 @@ namespace Ubongo
 
         private void EnsureEventSubscriptions()
         {
-            // 기존 구독 해제
             UnsubscribeFromEvents();
-
-            // 참조 갱신 (싱글톤 인스턴스가 늦게 생성된 경우 대비)
-            if (roundManager == null) roundManager = RoundManager.Instance;
-            if (gemSystem == null) gemSystem = GemSystem.Instance;
-            if (difficultySystem == null) difficultySystem = DifficultySystem.Instance;
-            if (tiebreakerManager == null) tiebreakerManager = TiebreakerManager.Instance;
-
-            // 재구독
+            EnsureRuntimeDependenciesConfigured();
             SubscribeToEvents();
         }
 
@@ -499,6 +551,11 @@ namespace Ubongo
             OnGameStateChanged?.Invoke(_currentState);
         }
 
+        private void HandleBoardPuzzleSolved()
+        {
+            CompleteLevel();
+        }
+
         // Event Handlers
         private void HandleRoundStarting(int round, RoundConfig config)
         {
@@ -508,33 +565,31 @@ namespace Ubongo
         private void HandleRoundStarted(int round)
         {
             ClearSolutionPreview();
-
-            // 퍼즐 생성
-            if (levelGenerator == null)
-            {
-                Debug.LogError($"[{nameof(GameManager)}] LevelGenerator reference is missing. Round cannot start.");
-                ChangeState(GameState.RoundFailed);
-                return;
-            }
+            EnsureRuntimeDependenciesConfigured();
 
             if (!levelGenerator.TryCreateLevelData(round, CurrentDifficulty, out LevelData levelData) || levelData == null)
             {
-                Debug.LogError($"[{nameof(GameManager)}] Failed to generate level data for round {round} ({CurrentDifficulty}).");
-                ChangeState(GameState.RoundFailed);
+                TryHandleRoundStartFailure($"Failed to generate level data for round {round} ({CurrentDifficulty}).");
                 return;
             }
 
-            if (gameBoard != null)
-            {
-                gameBoard.InitializeGrid(levelData.BoardSize);
-                gameBoard.SetTargetArea(levelData.TargetArea);
-            }
+            gameBoard.InitializeGrid(levelData.BoardSize);
+            gameBoard.SetTargetArea(levelData.TargetArea);
 
             ConfigureGameplayView();
             levelGenerator.SpawnFromLevelData(levelData);
             ConfigureGameplayView();
 
             ChangeState(GameState.Playing);
+        }
+
+        private void TryHandleRoundStartFailure(string reason)
+        {
+            Debug.LogError($"[{nameof(GameManager)}] {reason}");
+            if (!roundManager.TryFailCurrentRound(reason))
+            {
+                Debug.LogError($"[{nameof(GameManager)}] Round failure delegation was rejected. Current round state: {roundManager.CurrentState}.");
+            }
         }
 
         private void ConfigureGameplayView()
@@ -708,7 +763,13 @@ namespace Ubongo
         private void OnDestroy()
         {
             UnsubscribeFromEvents();
+            UnsubscribeFromBoardEvents();
             ClearSolutionPreview();
+
+            if (_instance == this)
+            {
+                _instance = null;
+            }
         }
 
         private void LoadSolutionRevealOption()
