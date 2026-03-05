@@ -498,3 +498,198 @@ Files:
 2. `ISettingsStore` 또는 전용 `IProgressStore` 포트 사용
 
 수용 기준:
+1. `UI`/`Manager` 레이어에서 `PlayerPrefs` 직접 참조 0건
+
+### T3-06 순수 C# 오케스트레이션 서비스 분리 + 생성자 DI
+Status: `TODO`  
+Priority: `P1`  
+Files:
+1. `Assets/Scripts/Application/Flow/*` (신규 서비스/유스케이스)
+2. `Assets/Scripts/Managers/GameManager.cs`
+3. `Assets/Scripts/Systems/RoundManager.cs`
+4. `Assets/Scripts/Systems/DifficultySystem.cs`
+5. `Assets/Scripts/Systems/GemSystem.cs`
+6. `Assets/Tests/EditMode/*` (서비스 단위 테스트)
+
+작업:
+1. `GameManager`/`RoundManager` 내부의 순수 규칙 로직(상태 전이, 라운드 판정, 정책 계산) 후보를 서비스로 추출
+2. 추출 서비스는 생성자 DI만 사용하고 `UnityEngine` 의존 금지
+3. `MonoBehaviour`는 Unity lifecycle/이벤트/표시 갱신만 담당하는 thin adapter로 축소
+4. `GameCompositionRoot`에서 순수 서비스를 생성 후 필요한 컴포넌트에 명시 전달
+5. 서비스 단위 테스트(EditMode)에서 GameObject 없이 핵심 규칙 검증
+
+수용 기준:
+1. 신규 서비스는 `new Service(deps...)` 형태로만 조립됨
+2. 추출된 규칙 로직 테스트가 Unity scene/lifecycle 없이 통과
+3. `GameManager` 책임(오케스트레이션/규칙 계산/Unity 제어)이 분리되어 LOC와 분기 복잡도가 감소
+
+---
+
+## Phase 4: 코드 품질/유지보수성 강화
+목표: 이후 기능 개발 비용을 낮춘다.
+
+### T4-01 대형 클래스 책임 분해
+Status: `TODO`  
+Priority: `P2`
+
+대상:
+1. `GameManager`
+2. `GameBoard`
+3. `PuzzlePiece`
+4. `UIManager`
+5. `ResultPanel`
+
+작업:
+1. UseCase/Controller/ViewModel/Presenter 분리
+2. 카메라/입력/애니메이션/상태머신 책임 분리
+
+수용 기준:
+1. 단일 클래스 500 LOC 초과 최소화 (예외는 생성 코드 제외)
+
+### T4-02 Namespace 일관성 정리
+Status: `TODO`  
+Priority: `P2`
+
+작업:
+1. `Core` 폴더 내 `namespace Ubongo` 사용 파일 정리
+2. 폴더-네임스페이스 규칙 문서화
+
+수용 기준:
+1. 파일 경로와 namespace 규칙이 일관
+
+### T4-03 public field 캡슐화
+Status: `TODO`  
+Priority: `P2`
+
+대상 예:
+1. `LevelData`, `LevelDifficultyConfig`, `PlayerResult`, `PieceDefinition` 등
+
+작업:
+1. 불변 구조(`readonly struct`/property) 또는 명시적 DTO 정책 선택
+2. 외부 수정이 필요한 값만 제한적으로 공개
+
+수용 기준:
+1. 데이터 모델 변경 경로가 명확
+
+---
+
+## 테스트 계획
+
+## 자동 테스트
+1. EditMode:
+   - InputManager 이벤트 구독/해제 테스트
+   - LevelGenerator 실패/가드 테스트
+   - 상태 전이별 UI 표준 테스트
+2. PlayMode:
+   - 상태 전이 시 패널 표시 테스트
+   - 난이도 선택 반영 테스트
+
+## 수동 검증
+1. 게임 시작 -> 난이도 반영 -> 라운드 진행
+2. 타임아웃/클리어/일시정지/재시작/메뉴 복귀
+3. 디버그 단축키 반복 입력 시 중복 반응 여부
+4. Zen -> Classic 전환 후 힌트 상태
+
+## Unity 배치 실행 예시
+```bash
+/Applications/Unity/Hub/Editor/6000.3.6f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -projectPath "$(pwd)" \
+  -runTests -testPlatform editmode \
+  -testResults "$(pwd)/Logs/editmode.xml" \
+  -quit -logFile Logs/editmode-run.log
+```
+
+```bash
+/Applications/Unity/Hub/Editor/6000.3.6f1/Unity.app/Contents/MacOS/Unity \
+  -batchmode -projectPath "$(pwd)" \
+  -runTests -testPlatform playmode \
+  -testResults "$(pwd)/Logs/playmode.xml" \
+  -quit -logFile Logs/playmode-run.log
+```
+
+주의:
+1. 프로젝트를 Unity 에디터에서 열어둔 상태에서는 batchmode 테스트가 실패할 수 있음
+
+---
+
+## 커밋 단위 가이드
+1. `fix:` P0 논리 결함
+2. `test:` 결함 재발 방지 테스트
+3. `refactor:` 구조 변경 (동작 동일)
+4. `docs:` 계획/결정 기록
+
+권장 순서:
+1. 코드 변경
+2. 테스트 추가/수정
+3. 로컬 검증
+4. 커밋
+5. 본 문서 Task 상태 업데이트
+
+---
+
+## Task Status Board
+아래 표는 구현 시 반드시 갱신한다.
+
+| ID | Phase | Priority | Status | Owner | Commit |
+|---|---|---|---|---|---|
+| T0-01 | 0 | P0 | DONE | Codex | - |
+| T0-02 | 0 | P1 | DONE | Codex | - |
+| T1-01 | 1 | P0 | DONE | Codex | - |
+| T1-02 | 1 | P0 | DONE | Codex | - |
+| T1-03 | 1 | P0 | DONE | Codex | - |
+| T1-04 | 1 | P0 | DONE | Codex | - |
+| T1-05 | 1 | P1 | DONE | Codex | - |
+| T1-06 | 1 | P1 | DONE | Codex | - |
+| T2-01 | 2 | P1 | DONE | Codex | - |
+| T2-02 | 2 | P1 | DONE | Codex | - |
+| T2-03 | 2 | P1 | DONE | Codex | - |
+| T2-04 | 2 | P2 | DONE | Codex | - |
+| T2-05 | 2 | P1 | DONE | Codex | - |
+| T3-01 | 3 | P1 | DONE | Codex | - |
+| T3-02 | 3 | P1 | TODO | - | - |
+| T3-03 | 3 | P1 | IN_PROGRESS | Codex | - |
+| T3-04 | 3 | P1 | TODO | - | - |
+| T3-05 | 3 | P1 | TODO | - | - |
+| T3-06 | 3 | P1 | TODO | - | - |
+| T4-01 | 4 | P2 | TODO | - | - |
+| T4-02 | 4 | P2 | TODO | - | - |
+| T4-03 | 4 | P2 | TODO | - | - |
+
+---
+
+## 컨텍스트 단절 후 재개 절차
+다음 순서로 재개하면 된다.
+
+1. 이 문서의 `Task Status Board` 확인
+2. `IN_PROGRESS` Task가 있으면 우선 선택, 없으면 가장 높은 Priority의 `TODO` 선택
+3. 해당 Task의 Files/작업/수용 기준 그대로 수행
+4. 테스트 실행
+5. 커밋 SHA를 표에 기록
+6. 다음 Task로 진행
+
+## 의사결정 로그 (Decision Log)
+아래는 구현 중 합의된 결정을 기록한다.
+
+1. 2026-02-22: 초기 계획 문서 생성
+2. 2026-02-22: T1-02 실패 계약은 `TryCreateLevelData(...)` 패턴으로 확정
+3. 2026-02-22: T1-06 임시 정책은 옵션 A(멀티플레이어 명시 비활성화)로 확정
+4. 2026-02-22: Sprint batch(`T1-01~T1-04`) 코드 구현 완료, 테스트 코드는 추가했으나 Unity Licensing 오류로 배치 실행 검증은 보류
+5. 2026-02-23: T1-05 완료. 힌트 기본값은 `StartGame(...)` 경계에서 모드 정책으로 재적용되도록 확정
+6. 2026-02-23: T1-06 완료. `GameMode.Multiplayer` 요청은 `GameMode.Classic`으로 정규화하는 옵션 A 정책을 코드/테스트로 고정
+7. 2026-02-23: `GameMode`/`DifficultyLevel`/`GameState` enum 경계를 Domain/Application으로 분리 (`T2-05`)
+8. 2026-02-23: Phase 3 순서를 명확화. asmdef 1차 골격(`T3-01`) 후 Domain Unity 제거 + noEngine 강제(`T3-02`)로 확정
+9. 2026-02-23: T2-02 완료. 난이도 표시 문자열 생성을 `DifficultyDisplayFormatter`로 분리
+10. 2026-02-23: T2-01 진행. `GemType` 단일 정의를 `Ubongo.Domain`으로 이동하고 시스템/비주얼 참조를 통일
+11. 2026-02-24: T2-01 완료. `GemDefinitionCatalog`로 보석 color/point/icon 규칙을 단일 매핑 소스로 통합
+12. 2026-02-24: T2-03 완료. 높이 규칙을 `TargetArea.RequiredHeight` 단일 소스로 통합하고 관련 테스트 계약(`InitializeGrid` Y 무시, `BoardSize.y`)을 보강
+13. 2026-02-24: T3-01 착수. `GameManager`의 Bootstrap 의존 제거, formatter 시그니처 분리, asmdef( Domain/Application/Infrastructure/Bootstrap/Presentation ) 1차 골격 및 테스트 asmdef 참조 갱신
+14. 2026-02-24: GameBoard bootstrap hardening 적용. `GameCompositionRoot`의 결정론적 `GameManager` 해석, `RoundManager.TryFailCurrentRound(...)` 경유 실패 위임, `GameBoard`의 `GameManager.Instance` 경로 제거(암묵 생성 차단)
+15. 2026-02-24: T0-01 상태 갱신. EditMode/PlayMode 테스트 통과를 확인했고, batchmode는 Unity 에디터 동시 실행 시 제한됨을 운영 제약으로 기록
+16. 2026-02-24: T3-01 완료 처리. asmdef 경계와 테스트 asmdef 참조 정리가 반영된 상태에서 전체 테스트 통과 확인
+17. 2026-02-25: T2-04 완료. `PuzzlePiece`의 기본 shape fallback을 `PieceCatalog` 단일 소스로 통합하고, empty block 입력 시 catalog fallback 계약 테스트를 추가
+18. 2026-02-25: T3-03 진행. `GameCompositionRoot`를 required-dependency 기반 해석 + fail-fast 조립 구조로 정리하고, 인터페이스 없이 직렬화 필드 타입 기준 주입으로 전환
+19. 2026-02-25: T3-03 진행. 수동 RuntimeGraph/타입맵을 제거하고 `[Inject]`/`[RequiredDependency]`/`[PostInject]` 기반 주입기로 전환
+20. 2026-02-26: DI 경계를 확정. 생성자 DI는 순수 C# 계층에만 적용하고, `MonoBehaviour` 의존성은 `GameCompositionRoot` 명시 연결로 통일
+21. 2026-02-26: Phase 3 우선순위를 재정의. `T3-03`에서 reflection 기반 주입 제거를 완료한 뒤 `T3-06`으로 규칙/오케스트레이션 로직을 순수 서비스로 분리
+22. 2026-02-26: `GameBoard` 수명 정책을 예외 없이 Scene-owned로 확정. Root에서 보드 자동 생성 금지
+23. 2026-02-26: 계획 문서를 `docs/plans/solid-clean-architecture-refactor-plan.md` 단일 문서로 통합
