@@ -305,17 +305,20 @@ namespace Ubongo.Systems
         {
             get
             {
-                if (_instance == null)
+                if (_instance != null)
                 {
-                    _instance = FindAnyObjectByType<GemSystem>();
-                    if (_instance == null)
-                    {
-                        var go = new GameObject("GemSystem");
-                        _instance = go.AddComponent<GemSystem>();
-                    }
+                    return _instance;
                 }
+
+                _instance = FindAnyObjectByType<GemSystem>();
                 return _instance;
             }
+        }
+
+        public static bool TryGetExistingInstance(out GemSystem gemSystem)
+        {
+            gemSystem = Instance;
+            return gemSystem != null;
         }
 
         [Header("Gem Pool Settings")]
@@ -344,13 +347,6 @@ namespace Ubongo.Systems
                 return;
             }
             _instance = this;
-
-            // DontDestroyOnLoad은 루트 오브젝트에만 적용 가능
-            if (transform.parent != null)
-            {
-                transform.SetParent(null);
-            }
-            DontDestroyOnLoad(gameObject);
 
             InitializeGemCollection();
             InitializeGemPool();
@@ -555,6 +551,19 @@ namespace Ubongo.Systems
                 amberCount: _playerGems.GetCountByType(GemType.Amber),
                 totalPoints: _playerGems.TotalPoints
             );
+        }
+
+        private void OnDestroy()
+        {
+            if (_poolManager != null)
+            {
+                _poolManager.OnPoolChanged -= HandlePoolChanged;
+            }
+
+            if (_instance == this)
+            {
+                _instance = null;
+            }
         }
     }
 
