@@ -65,7 +65,7 @@ namespace Ubongo
         [SerializeField] private Color timerWarningColor = Color.yellow;
         [SerializeField] private Color timerDangerColor = Color.red;
 
-        private GameManager gameManager;
+        [SerializeField] private GameManager gameManager;
         private int currentGems = 0;
         private int totalGems = 0;
         private int currentRound = 1;
@@ -82,10 +82,26 @@ namespace Ubongo
 
         private void Start()
         {
-            gameManager = GameManager.Instance;
+            EnsureGameManagerConfigured();
             InitializeUI();
             SubscribeToEvents();
             LoadTotalGems();
+        }
+
+        public void ConfigureRuntimeDependencies(GameManager configuredGameManager)
+        {
+            gameManager = configuredGameManager ?? throw new ArgumentNullException(nameof(configuredGameManager));
+        }
+
+        private void EnsureGameManagerConfigured()
+        {
+            if (gameManager != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(UIManager)}] GameManager dependency is missing. Configure via GameCompositionRoot.");
         }
 
         private void InitializeUI()
@@ -128,13 +144,10 @@ namespace Ubongo
 
         private void SubscribeToEvents()
         {
-            if (gameManager != null)
-            {
-                gameManager.OnGameStateChanged += OnGameStateChanged;
-                gameManager.OnScoreChanged += UpdateScore;
-                gameManager.OnTimeChanged += UpdateTimer;
-                gameManager.OnLevelComplete += OnLevelCompleted;
-            }
+            gameManager.OnGameStateChanged += OnGameStateChanged;
+            gameManager.OnScoreChanged += UpdateScore;
+            gameManager.OnTimeChanged += UpdateTimer;
+            gameManager.OnLevelComplete += OnLevelCompleted;
         }
 
         private void OnDestroy()
@@ -328,10 +341,8 @@ namespace Ubongo
         {
             if (difficultyText == null) return;
 
-            DifficultyConfig config = gameManager != null && gameManager.DifficultySystem != null
-                ? gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty)
-                : DifficultyConfig.CreateDefault(currentDifficulty);
-            difficultyText.text = DifficultyDisplayFormatter.Format(config);
+            DifficultyConfig config = gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty);
+            difficultyText.text = DifficultyDisplayFormatter.Format(config.DisplayName, config.PieceCount);
         }
 
         public void SetDifficulty(DifficultyLevel difficulty)
@@ -342,11 +353,6 @@ namespace Ubongo
 
         private void SyncDifficultyFromGameManager()
         {
-            if (gameManager == null)
-            {
-                return;
-            }
-
             currentDifficulty = gameManager.CurrentDifficulty;
         }
 
@@ -565,7 +571,6 @@ namespace Ubongo
 
         private void OnStartGame()
         {
-            if (gameManager == null) return;
             ResetRounds();
             gameManager.StartGame(currentDifficulty);
         }
@@ -587,7 +592,6 @@ namespace Ubongo
 
         private void OnRetryGame()
         {
-            if (gameManager == null) return;
             ResetRounds();
             gameManager.StartGame(currentDifficulty);
         }

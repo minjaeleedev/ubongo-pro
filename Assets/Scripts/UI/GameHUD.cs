@@ -52,8 +52,8 @@ namespace Ubongo
         [SerializeField] private Text rotateXHintText;
         [SerializeField] private Text rotateZHintText;
 
-        private GameManager gameManager;
-        private UIManager uiManager;
+        [SerializeField] private GameManager gameManager;
+        [SerializeField] private UIManager uiManager;
         private Vector3 originalTimerScale;
         private bool isHeartbeatActive = false;
         private bool hasShown30SecWarning = false;
@@ -72,21 +72,42 @@ namespace Ubongo
 
         private void Start()
         {
-            gameManager = GameManager.Instance;
-            uiManager = FindAnyObjectByType<UIManager>();
+            EnsureGameManagerConfigured();
+            EnsureUIManagerConfigured();
 
-            if (gameManager != null)
-            {
-                gameManager.OnTimeChanged += OnTimeChanged;
-                gameManager.OnGameStateChanged += OnGameStateChanged;
-            }
-
-            if (uiManager != null)
-            {
-                uiManager.OnGemsChanged += OnGemsChanged;
-            }
+            gameManager.OnTimeChanged += OnTimeChanged;
+            gameManager.OnGameStateChanged += OnGameStateChanged;
+            uiManager.OnGemsChanged += OnGemsChanged;
 
             InitializeHUD();
+        }
+
+        public void ConfigureRuntimeDependencies(GameManager configuredGameManager, UIManager configuredUiManager)
+        {
+            gameManager = configuredGameManager ?? throw new ArgumentNullException(nameof(configuredGameManager));
+            uiManager = configuredUiManager ?? throw new ArgumentNullException(nameof(configuredUiManager));
+        }
+
+        private void EnsureGameManagerConfigured()
+        {
+            if (gameManager != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(GameHUD)}] GameManager dependency is missing. Configure via GameCompositionRoot.");
+        }
+
+        private void EnsureUIManagerConfigured()
+        {
+            if (uiManager != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(GameHUD)}] UIManager dependency is missing. Configure via GameCompositionRoot.");
         }
 
         private void OnDestroy()
