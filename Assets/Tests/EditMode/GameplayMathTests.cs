@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
-using Ubongo.Application.Bootstrap;
+using Ubongo.Core;
 
 namespace Ubongo.Tests.EditMode
 {
@@ -69,7 +69,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
-            GameBoardFactory.EnsureConstructed(board);
+            EnsureBoardConstructed(board);
 
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             GameObject visualChild = GameObject.CreatePrimitive(PrimitiveType.Quad);
@@ -90,7 +90,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
-            GameBoardFactory.EnsureConstructed(board);
+            EnsureBoardConstructed(board);
 
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Renderer rootRenderer = cellRoot.GetComponent<Renderer>();
@@ -156,6 +156,45 @@ namespace Ubongo.Tests.EditMode
             );
 
             Object.DestroyImmediate(pieceObject);
+        }
+
+        [Test]
+        public void PuzzlePiece_SetBlockPositions_EmptyList_UsesPieceCatalogFallback()
+        {
+            GameObject pieceObject = new GameObject("Piece");
+            PuzzlePiece piece = pieceObject.AddComponent<PuzzlePiece>();
+
+            piece.SetBlockPositions(new List<Vector3Int>());
+            string generatedSignature = BuildNormalizedSignature(piece.GetBlockPositions());
+
+            HashSet<string> catalogSignatures = PieceCatalog.GetAllPieces()
+                .Select(definition => BuildNormalizedSignature(definition.Blocks))
+                .ToHashSet();
+
+            Assert.IsTrue(catalogSignatures.Contains(generatedSignature));
+            Object.DestroyImmediate(pieceObject);
+        }
+
+        private static string BuildNormalizedSignature(IEnumerable<Vector3Int> blocks)
+        {
+            Vector3Int[] normalized = RotationUtil.NormalizeToOrigin(blocks.ToArray());
+            return string.Join(
+                "|",
+                normalized
+                    .OrderBy(position => position.x)
+                    .ThenBy(position => position.y)
+                    .ThenBy(position => position.z)
+                    .Select(position => $"{position.x},{position.y},{position.z}"));
+        }
+
+        private static void EnsureBoardConstructed(GameBoard board)
+        {
+            if (board == null || board.IsConstructed)
+            {
+                return;
+            }
+
+            board.Construct(BoardRuntimeServices.CreateDefault());
         }
     }
 }
