@@ -1,6 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.InputSystem;
+using System;
 using System.Text;
 
 namespace Ubongo
@@ -62,6 +62,7 @@ namespace Ubongo
         private StringBuilder logBuilder = new StringBuilder();
         private GameBoard gameBoard;
         private LevelGenerator levelGenerator;
+        [SerializeField] private InputManager inputManager;
         private PuzzlePiece selectedPiece;
 
         #endregion
@@ -77,12 +78,29 @@ namespace Ubongo
         {
             gameBoard = FindAnyObjectByType<GameBoard>();
             levelGenerator = FindAnyObjectByType<LevelGenerator>();
+            EnsureInputManagerConfigured();
 
             fpsTimeLeft = fpsUpdateInterval;
 
             HideAllPanels();
             SetupDropdowns();
             SubscribeToInputEvents();
+        }
+
+        public void ConfigureRuntimeDependencies(InputManager configuredInputManager)
+        {
+            inputManager = configuredInputManager ?? throw new ArgumentNullException(nameof(configuredInputManager));
+        }
+
+        private void EnsureInputManagerConfigured()
+        {
+            if (inputManager != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(DebugPanel)}] InputManager dependency is missing. Configure via GameCompositionRoot.");
         }
 
         private void OnDestroy()
@@ -92,38 +110,39 @@ namespace Ubongo
 
         private void SubscribeToInputEvents()
         {
-            if (InputManager.Instance == null) return;
-
-            InputManager.Instance.OnToggleHelp += ShowHelpOverlay;
-            InputManager.Instance.OnToggleDebugPanel += ToggleDebugPanel;
-            InputManager.Instance.OnToggleGenerator += TogglePuzzleGenerator;
-            InputManager.Instance.OnToggleRotation += ToggleRotationTester;
-            InputManager.Instance.OnQuickGenerate += QuickGeneratePuzzle;
-            InputManager.Instance.OnAutoSolve += AutoSolveCurrentPuzzle;
-            InputManager.Instance.OnStepSolution += StepThroughSolution;
-            InputManager.Instance.OnExport += ExportCurrentState;
-            InputManager.Instance.OnToggleGrid += ToggleGridOverlay;
-            InputManager.Instance.OnToggleWireframe += ToggleWireframeMode;
-            InputManager.Instance.OnToggleStats += ToggleDebugPanel;
-            InputManager.Instance.OnResetPuzzle += ResetPuzzle;
+            inputManager.OnToggleHelp += ShowHelpOverlay;
+            inputManager.OnToggleDebugPanel += ToggleDebugPanel;
+            inputManager.OnToggleGenerator += TogglePuzzleGenerator;
+            inputManager.OnToggleRotation += ToggleRotationTester;
+            inputManager.OnQuickGenerate += QuickGeneratePuzzle;
+            inputManager.OnAutoSolve += AutoSolveCurrentPuzzle;
+            inputManager.OnStepSolution += StepThroughSolution;
+            inputManager.OnExport += ExportCurrentState;
+            inputManager.OnToggleGrid += ToggleGridOverlay;
+            inputManager.OnToggleWireframe += ToggleWireframeMode;
+            inputManager.OnToggleStats += ToggleDebugPanel;
+            inputManager.OnResetPuzzle += ResetPuzzle;
         }
 
         private void UnsubscribeFromInputEvents()
         {
-            if (InputManager.Instance == null) return;
+            if (inputManager == null)
+            {
+                return;
+            }
 
-            InputManager.Instance.OnToggleHelp -= ShowHelpOverlay;
-            InputManager.Instance.OnToggleDebugPanel -= ToggleDebugPanel;
-            InputManager.Instance.OnToggleGenerator -= TogglePuzzleGenerator;
-            InputManager.Instance.OnToggleRotation -= ToggleRotationTester;
-            InputManager.Instance.OnQuickGenerate -= QuickGeneratePuzzle;
-            InputManager.Instance.OnAutoSolve -= AutoSolveCurrentPuzzle;
-            InputManager.Instance.OnStepSolution -= StepThroughSolution;
-            InputManager.Instance.OnExport -= ExportCurrentState;
-            InputManager.Instance.OnToggleGrid -= ToggleGridOverlay;
-            InputManager.Instance.OnToggleWireframe -= ToggleWireframeMode;
-            InputManager.Instance.OnToggleStats -= ToggleDebugPanel;
-            InputManager.Instance.OnResetPuzzle -= ResetPuzzle;
+            inputManager.OnToggleHelp -= ShowHelpOverlay;
+            inputManager.OnToggleDebugPanel -= ToggleDebugPanel;
+            inputManager.OnToggleGenerator -= TogglePuzzleGenerator;
+            inputManager.OnToggleRotation -= ToggleRotationTester;
+            inputManager.OnQuickGenerate -= QuickGeneratePuzzle;
+            inputManager.OnAutoSolve -= AutoSolveCurrentPuzzle;
+            inputManager.OnStepSolution -= StepThroughSolution;
+            inputManager.OnExport -= ExportCurrentState;
+            inputManager.OnToggleGrid -= ToggleGridOverlay;
+            inputManager.OnToggleWireframe -= ToggleWireframeMode;
+            inputManager.OnToggleStats -= ToggleDebugPanel;
+            inputManager.OnResetPuzzle -= ResetPuzzle;
         }
 
         private void Update()
@@ -243,7 +262,7 @@ namespace Ubongo
             if (puzzleInfoText == null || gameBoard == null) return;
 
             StringBuilder sb = new StringBuilder();
-            sb.AppendLine($"Current Puzzle: puzzle_{Random.Range(1, 100):D3}");
+            sb.AppendLine($"Current Puzzle: puzzle_{UnityEngine.Random.Range(1, 100):D3}");
             sb.AppendLine($"Difficulty: {GetCurrentDifficulty()}");
             sb.AppendLine($"Target Shape: {gameBoard.Width}x{gameBoard.Height}x{gameBoard.Depth}");
             sb.AppendLine($"Blocks Available: {GetAvailableBlockCount()}/{GetTotalBlockCount()}");
@@ -453,11 +472,11 @@ namespace Ubongo
         {
             if (selectedPiece != null)
             {
-                int randomRotations = Random.Range(1, 5);
+                int randomRotations = UnityEngine.Random.Range(1, 5);
                 for (int i = 0; i < randomRotations; i++)
                 {
-                    int axis = Random.Range(0, 3);
-                    int direction = Random.Range(0, 2) * 2 - 1;
+                    int axis = UnityEngine.Random.Range(0, 3);
+                    int direction = UnityEngine.Random.Range(0, 2) * 2 - 1;
                     switch (axis)
                     {
                         case 0: OnRotateX(direction); break;
@@ -609,23 +628,7 @@ namespace Ubongo
 
         private Vector3 GetMouseWorldPosition()
         {
-            if (InputManager.Instance != null)
-            {
-                return InputManager.Instance.GetWorldPosition(0f);
-            }
-
-            if (Camera.main == null) return Vector3.zero;
-
-            Vector2 mousePosition = Mouse.current != null ? Mouse.current.position.ReadValue() : Vector2.zero;
-            Ray ray = Camera.main.ScreenPointToRay(mousePosition);
-            Plane groundPlane = new Plane(Vector3.up, Vector3.zero);
-
-            if (groundPlane.Raycast(ray, out float distance))
-            {
-                return ray.GetPoint(distance);
-            }
-
-            return Vector3.zero;
+            return inputManager.GetWorldPosition(0f);
         }
 
         private string GetBlockNameByIndex(int index)

@@ -1,12 +1,10 @@
-using Ubongo.Systems;
-
 namespace Ubongo.Application.Formatting
 {
     public static class DifficultyDisplayFormatter
     {
-        public static string Format(DifficultyConfig config)
+        public static string Format(string displayName, int pieceCount)
         {
-            return $"{config.DisplayName} ({config.PieceCount} pieces)";
+            return $"{displayName} ({pieceCount} pieces)";
         }
     }
 }

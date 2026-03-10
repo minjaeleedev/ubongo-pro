@@ -95,8 +95,7 @@ namespace Ubongo
         [SerializeField] private Color successBackgroundColor = new Color(0.1f, 0.3f, 0.1f, 0.9f);
         [SerializeField] private Color failureBackgroundColor = new Color(0.3f, 0.1f, 0.1f, 0.9f);
 
-        private GameManager gameManager;
-        private UIManager uiManager;
+        [SerializeField] private GameManager gameManager;
         private ResultType currentResultType;
         private int displayedScore = 0;
         private bool isAnimating = false;
@@ -107,8 +106,7 @@ namespace Ubongo
 
         private void Start()
         {
-            gameManager = GameManager.Instance;
-            uiManager = FindAnyObjectByType<UIManager>();
+            EnsureGameManagerConfigured();
 
             InitializeButtons();
             HideAllContainers();
@@ -119,6 +117,22 @@ namespace Ubongo
                 panelCanvasGroup.interactable = false;
                 panelCanvasGroup.blocksRaycasts = false;
             }
+        }
+
+        public void ConfigureRuntimeDependencies(GameManager configuredGameManager)
+        {
+            gameManager = configuredGameManager ?? throw new ArgumentNullException(nameof(configuredGameManager));
+        }
+
+        private void EnsureGameManagerConfigured()
+        {
+            if (gameManager != null)
+            {
+                return;
+            }
+
+            throw new InvalidOperationException(
+                $"[{nameof(ResultPanel)}] GameManager dependency is missing. Configure via GameCompositionRoot.");
         }
 
         private void InitializeButtons()
