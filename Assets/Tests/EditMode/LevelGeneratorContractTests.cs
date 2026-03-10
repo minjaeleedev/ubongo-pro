@@ -144,6 +144,32 @@ namespace Ubongo.Tests.EditMode
             UnityEngine.Object.DestroyImmediate(generatorObject);
         }
 
+        [Test]
+        public void TryCreateLevelData_Expert_UsesReachableBlockTotal()
+        {
+            GameObject generatorObject = new GameObject("LevelGenerator_Test");
+            LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
+
+            bool generated = false;
+            LevelData levelData = null;
+            for (int attempt = 0; attempt < 3 && !generated; attempt++)
+            {
+                generated = generator.TryCreateLevelData(1, DifficultyLevel.Expert, out levelData);
+            }
+
+            Assert.IsTrue(generated, "Expected level generation to succeed for Expert difficulty.");
+            Assert.IsNotNull(levelData);
+            Assert.AreEqual(TargetArea.RequiredHeight, levelData.BoardSize.y);
+
+            int totalBlocks = levelData.Pieces.Sum(piece => piece.BlockCount);
+            int targetBlocks = LevelDifficultyConfig.GetConfig(DifficultyLevel.Expert).TargetBlocks;
+            Assert.LessOrEqual(totalBlocks, targetBlocks);
+            Assert.AreEqual(0, totalBlocks % TargetArea.RequiredHeight);
+            Assert.AreEqual(levelData.TargetArea.TotalCells, totalBlocks);
+
+            UnityEngine.Object.DestroyImmediate(generatorObject);
+        }
+
         private static LevelData CreateManualLevelData(DifficultyLevel difficulty, int levelNumber)
         {
             return new LevelData
