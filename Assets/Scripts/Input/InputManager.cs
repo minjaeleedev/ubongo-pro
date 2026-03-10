@@ -9,7 +9,26 @@ namespace Ubongo
         private const string PieceLayerName = "Piece";
         private const string BoardLayerName = "Board";
 
-        public static InputManager Instance { get; private set; }
+        private static InputManager _instance;
+        public static InputManager Instance
+        {
+            get
+            {
+                if (_instance != null)
+                {
+                    return _instance;
+                }
+
+                _instance = FindAnyObjectByType<InputManager>();
+                return _instance;
+            }
+        }
+
+        public static bool TryGetExistingInstance(out InputManager inputManager)
+        {
+            inputManager = Instance;
+            return inputManager != null;
+        }
 
         [Header("Layer Masks")]
         [SerializeField] private LayerMask pieceLayerMask = -1;
@@ -55,14 +74,13 @@ namespace Ubongo
 
         private void Awake()
         {
-            if (Instance != null && Instance != this)
+            if (_instance != null && _instance != this)
             {
                 Destroy(gameObject);
                 return;
             }
 
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
+            _instance = this;
 
             inputActions = new UbongoInputActions();
             mainCamera = Camera.main;
@@ -107,9 +125,9 @@ namespace Ubongo
 
         private void OnDestroy()
         {
-            if (Instance == this)
+            if (_instance == this)
             {
-                Instance = null;
+                _instance = null;
             }
             inputActions?.Dispose();
         }

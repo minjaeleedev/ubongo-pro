@@ -72,17 +72,20 @@ namespace Ubongo.Systems
         {
             get
             {
-                if (_instance == null)
+                if (_instance != null)
                 {
-                    _instance = FindAnyObjectByType<TiebreakerManager>();
-                    if (_instance == null)
-                    {
-                        var go = new GameObject("TiebreakerManager");
-                        _instance = go.AddComponent<TiebreakerManager>();
-                    }
+                    return _instance;
                 }
+
+                _instance = FindAnyObjectByType<TiebreakerManager>();
                 return _instance;
             }
+        }
+
+        public static bool TryGetExistingInstance(out TiebreakerManager tiebreakerManager)
+        {
+            tiebreakerManager = Instance;
+            return tiebreakerManager != null;
         }
 
         [Header("Tiebreaker Settings")]
@@ -119,13 +122,6 @@ namespace Ubongo.Systems
                 return;
             }
             _instance = this;
-
-            // DontDestroyOnLoad은 루트 오브젝트에만 적용 가능
-            if (transform.parent != null)
-            {
-                transform.SetParent(null);
-            }
-            DontDestroyOnLoad(gameObject);
 
             Initialize();
         }
@@ -311,6 +307,14 @@ namespace Ubongo.Systems
         public int GetCompletedPlayerCount()
         {
             return _completionTimes.Count;
+        }
+
+        private void OnDestroy()
+        {
+            if (_instance == this)
+            {
+                _instance = null;
+            }
         }
     }
 }

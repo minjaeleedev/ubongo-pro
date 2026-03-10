@@ -74,23 +74,30 @@ namespace Ubongo.Systems
         {
             get
             {
-                if (_instance == null)
+                if (_instance != null)
                 {
-                    _instance = FindAnyObjectByType<RoundManager>();
-                    if (_instance == null)
-                    {
-                        var go = new GameObject("RoundManager");
-                        _instance = go.AddComponent<RoundManager>();
-                    }
+                    return _instance;
                 }
+
+                _instance = FindAnyObjectByType<RoundManager>();
                 return _instance;
             }
+        }
+
+        public static bool TryGetExistingInstance(out RoundManager roundManager)
+        {
+            roundManager = Instance;
+            return roundManager != null;
         }
 
         [Header("Round Settings")]
         [SerializeField] private int totalRounds = 9;
         [SerializeField] private float transitionDelay = 2f;
         [SerializeField] private bool enableSecondChance = true;
+
+        [Header("References")]
+        [SerializeField] private DifficultySystem difficultySystem;
+        [SerializeField] private GemSystem gemSystem;
 
         private int _currentRound;
         private RoundState _currentState;
@@ -137,14 +144,15 @@ namespace Ubongo.Systems
             }
             _instance = this;
 
-            // DontDestroyOnLoad은 루트 오브젝트에만 적용 가능
-            if (transform.parent != null)
-            {
-                transform.SetParent(null);
-            }
-            DontDestroyOnLoad(gameObject);
-
             InitializeRoundManager();
+        }
+
+        public void ConfigureRuntimeDependencies(
+            DifficultySystem configuredDifficultySystem,
+            GemSystem configuredGemSystem)
+        {
+            difficultySystem = configuredDifficultySystem ?? throw new ArgumentNullException(nameof(configuredDifficultySystem));
+            gemSystem = configuredGemSystem ?? throw new ArgumentNullException(nameof(configuredGemSystem));
         }
 
         private void InitializeRoundManager()
@@ -155,6 +163,28 @@ namespace Ubongo.Systems
             _isSecondChanceRound = false;
             _playersCompletedCount = 0;
             _totalPlayersInRound = 1; // 싱글플레이어 기본값
+        }
+
+        private DifficultySystem EnsureDifficultySystemConfigured()
+        {
+            if (difficultySystem == null)
+            {
+                throw new InvalidOperationException(
+                    $"[{nameof(RoundManager)}] DifficultySystem dependency is missing. Configure via GameCompositionRoot.");
+            }
+
+            return difficultySystem;
+        }
+
+        private GemSystem EnsureGemSystemConfigured()
+        {
+            if (gemSystem == null)
+            {
+                throw new InvalidOperationException(
+                    $"[{nameof(RoundManager)}] GemSystem dependency is missing. Configure via GameCompositionRoot.");
+            }
+
+            return gemSystem;
         }
 
         /// <summary>
@@ -206,6 +236,11 @@ namespace Ubongo.Systems
 
             OnRoundStarted?.Invoke(_currentRound);
 
+            if (_currentState != RoundState.InProgress)
+            {
+                yield break;
+            }
+
             if (_timerCoroutine != null)
             {
                 StopCoroutine(_timerCoroutine);
@@ -215,8 +250,8 @@ namespace Ubongo.Systems
 
         private RoundConfig CreateRoundConfig()
         {
-            var difficultyConfig = DifficultySystem.Instance?.GetDifficultyConfig(_currentDifficulty)
-                ?? DifficultyConfig.CreateDefault(_currentDifficulty);
+            DifficultySystem currentDifficultySystem = EnsureDifficultySystemConfigured();
+            DifficultyConfig difficultyConfig = currentDifficultySystem.GetDifficultyConfig(_currentDifficulty);
 
             int puzzleId = GeneratePuzzleId();
 
@@ -276,8 +311,8 @@ namespace Ubongo.Systems
             float timeSpent = Time.time - _roundStartTime;
             float remainingTimeRatio = Mathf.Clamp01((_currentTimeLimit - timeSpent) / _currentTimeLimit);
 
-            var gemReward = GemSystem.Instance?.AwardGemsForSinglePlayer(remainingTimeRatio)
-                ?? new GemRewardResult(null, null);
+            GemSystem currentGemSystem = EnsureGemSystemConfigured();
+            GemRewardResult gemReward = currentGemSystem.AwardGemsForSinglePlayer(remainingTimeRatio);
 
             var result = new RoundResult(
                 roundNumber: _currentRound,
@@ -296,7 +331,25 @@ namespace Ubongo.Systems
         /// <summary>
         /// 라운드 실패 처리
         /// </summary>
-        private void FailRound()
+        public bool TryFailCurrentRound(string reason = null)
+        {
+            if (_currentState != RoundState.InProgress && _currentState != RoundState.SecondChanceInProgress)
+            {
+                if (!string.IsNullOrWhiteSpace(reason))
+                {
+                    Debug.LogWarning($"[{nameof(RoundManager)}] Cannot fail round in state {_currentState}. Reason: {reason}");
+                }
+                return false;
+            }
+
+            FailRound(allowSecondChance: false);
+            return true;
+        }
+
+        /// <summary>
+        /// 라운드 실패 처리
+        /// </summary>
+        private void FailRound(bool allowSecondChance = true)
         {
             if (_currentState != RoundState.InProgress && _currentState != RoundState.SecondChanceInProgress) return;
 
@@ -315,7 +368,7 @@ namespace Ubongo.Systems
 
             // 일반 라운드 실패 - Second Chance 가능 여부 확인
             // 멀티플레이어에서 모든 플레이어가 실패한 경우에만 Second Chance 발동
-            if (enableSecondChance && ShouldTriggerSecondChance())
+            if (allowSecondChance && enableSecondChance && ShouldTriggerSecondChance())
             {
                 StartSecondChanceRound();
                 return;
@@ -404,8 +457,8 @@ namespace Ubongo.Systems
             float timeSpent = Time.time - _roundStartTime;
 
             // Second Chance: 랜덤 보석 1개만 지급 (고정 보석 없음)
-            var gemReward = GemSystem.Instance?.AwardRandomGemOnly()
-                ?? new GemRewardResult(null, null);
+            GemSystem currentGemSystem = EnsureGemSystemConfigured();
+            GemRewardResult gemReward = currentGemSystem.AwardRandomGemOnly();
 
             var result = new RoundResult(
                 roundNumber: _currentRound,
@@ -564,7 +617,7 @@ namespace Ubongo.Systems
                 completedRounds: completedRounds,
                 totalTimeSpent: totalTimeSpent,
                 totalGemPoints: totalGemPoints,
-                grade: GemSystem.Instance?.CalculateGrade() ?? 'D'
+                grade: EnsureGemSystemConfigured().CalculateGrade()
             );
         }
 
@@ -573,6 +626,11 @@ namespace Ubongo.Systems
             if (_timerCoroutine != null)
             {
                 StopCoroutine(_timerCoroutine);
+            }
+
+            if (_instance == this)
+            {
+                _instance = null;
             }
         }
     }
