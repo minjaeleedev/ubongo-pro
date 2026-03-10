@@ -2,6 +2,7 @@ using UnityEngine;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using Ubongo.Core;
 
 namespace Ubongo
 {
@@ -74,6 +75,7 @@ namespace Ubongo
         private PlacementState currentState = PlacementState.Default;
         private Vector3 originalPosition;
         private GameBoard gameBoard;
+        private InputManager inputManager;
         private List<GameObject> blockObjects = new List<GameObject>();
         private List<GameObject> outlineObjects = new List<GameObject>();
         private List<GameObject> heightIndicators = new List<GameObject>();
@@ -140,28 +142,30 @@ namespace Ubongo
 
         private void SubscribeToInputEvents()
         {
-            if (InputManager.Instance == null) return;
+            if (!ResolveInputManager()) return;
             if (subscribedToInput) return;
 
-            InputManager.Instance.OnPieceHoverEnter += HandleHoverEnter;
-            InputManager.Instance.OnPieceHoverExit += HandleHoverExit;
-            InputManager.Instance.OnPieceSelectStart += HandleSelectStart;
-            InputManager.Instance.OnPieceDrag += HandleDrag;
-            InputManager.Instance.OnPieceSelectEnd += HandleSelectEnd;
-            InputManager.Instance.OnPieceRotate += HandleRotate;
+            inputManager.OnPieceHoverEnter += HandleHoverEnter;
+            inputManager.OnPieceHoverExit += HandleHoverExit;
+            inputManager.OnPieceSelectStart += HandleSelectStart;
+            inputManager.OnPieceDrag += HandleDrag;
+            inputManager.OnPieceSelectEnd += HandleSelectEnd;
+            inputManager.OnPieceRotate += HandleRotate;
             subscribedToInput = true;
         }
 
         private void UnsubscribeFromInputEvents()
         {
-            if (InputManager.Instance == null) return;
+            if (inputManager == null) return;
 
-            InputManager.Instance.OnPieceHoverEnter -= HandleHoverEnter;
-            InputManager.Instance.OnPieceHoverExit -= HandleHoverExit;
-            InputManager.Instance.OnPieceSelectStart -= HandleSelectStart;
-            InputManager.Instance.OnPieceDrag -= HandleDrag;
-            InputManager.Instance.OnPieceSelectEnd -= HandleSelectEnd;
-            InputManager.Instance.OnPieceRotate -= HandleRotate;
+            inputManager.OnPieceHoverEnter -= HandleHoverEnter;
+            inputManager.OnPieceHoverExit -= HandleHoverExit;
+            inputManager.OnPieceSelectStart -= HandleSelectStart;
+            inputManager.OnPieceDrag -= HandleDrag;
+            inputManager.OnPieceSelectEnd -= HandleSelectEnd;
+            inputManager.OnPieceRotate -= HandleRotate;
+            subscribedToInput = false;
+            inputManager = null;
         }
 
         private void HandleHoverEnter(PuzzlePiece piece)
@@ -275,15 +279,20 @@ namespace Ubongo
         private void HandleRotate(Vector3 axis, float angle)
         {
             if (!isDragging) return;
-            if (InputManager.Instance == null) return;
-            if (InputManager.Instance.SelectedPiece != this) return;
+            if (!ResolveInputManager()) return;
+            if (inputManager.SelectedPiece != this) return;
 
             RotateWithAnimation(axis, angle);
         }
 
         private void Update()
         {
-            if (!subscribedToInput && InputManager.Instance != null)
+            if (subscribedToInput && inputManager == null)
+            {
+                subscribedToInput = false;
+            }
+
+            if (!subscribedToInput && ResolveInputManager())
             {
                 SubscribeToInputEvents();
             }
@@ -301,6 +310,21 @@ namespace Ubongo
             {
                 UpdatePlacementPreview();
             }
+        }
+
+        private bool ResolveInputManager()
+        {
+            if (inputManager != null)
+            {
+                return true;
+            }
+
+            if (InputManager.TryGetExistingInstance(out inputManager))
+            {
+                return true;
+            }
+
+            return false;
         }
 
         private void CreateBlockVisuals()
@@ -423,42 +447,28 @@ namespace Ubongo
 
         private void GenerateDefaultShape()
         {
-            int shapeType = UnityEngine.Random.Range(0, 5);
+            PieceDefinition[] catalog = PieceCatalog.GetAllPieces();
+            if (catalog == null || catalog.Length == 0)
+            {
+                blockPositions.Clear();
+                blockPositions.Add(Vector3Int.zero);
+                Debug.LogWarning($"[{nameof(PuzzlePiece)}] PieceCatalog is empty. Falling back to a single-block default.");
+                return;
+            }
+
+            PieceDefinition fallbackDefinition = catalog[UnityEngine.Random.Range(0, catalog.Length)];
             blockPositions.Clear();
 
-            switch (shapeType)
+            Vector3Int[] fallbackBlocks = fallbackDefinition.Blocks;
+            if (fallbackBlocks == null || fallbackBlocks.Length == 0)
             {
-                case 0:
-                    blockPositions.Add(new Vector3Int(0, 0, 0));
-                    blockPositions.Add(new Vector3Int(1, 0, 0));
-                    blockPositions.Add(new Vector3Int(0, 0, 1));
-                    break;
+                blockPositions.Add(Vector3Int.zero);
+                return;
+            }
 
-                case 1:
-                    blockPositions.Add(new Vector3Int(0, 0, 0));
-                    blockPositions.Add(new Vector3Int(1, 0, 0));
-                    blockPositions.Add(new Vector3Int(2, 0, 0));
-                    break;
-
-                case 2:
-                    blockPositions.Add(new Vector3Int(0, 0, 0));
-                    blockPositions.Add(new Vector3Int(1, 0, 0));
-                    blockPositions.Add(new Vector3Int(0, 1, 0));
-                    blockPositions.Add(new Vector3Int(1, 1, 0));
-                    break;
-
-                case 3:
-                    blockPositions.Add(new Vector3Int(0, 0, 0));
-                    blockPositions.Add(new Vector3Int(1, 0, 0));
-                    blockPositions.Add(new Vector3Int(1, 0, 1));
-                    blockPositions.Add(new Vector3Int(2, 0, 1));
-                    break;
-
-                case 4:
-                    blockPositions.Add(new Vector3Int(0, 0, 0));
-                    blockPositions.Add(new Vector3Int(0, 1, 0));
-                    blockPositions.Add(new Vector3Int(0, 0, 1));
-                    break;
+            for (int i = 0; i < fallbackBlocks.Length; i++)
+            {
+                blockPositions.Add(fallbackBlocks[i]);
             }
         }
 
