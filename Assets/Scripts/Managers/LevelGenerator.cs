@@ -261,17 +261,18 @@ namespace Ubongo
 
             LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
             int generationAttempts = GetGenerationAttemptCount();
+            int targetBlocks = ResolveReachableTargetBlocks(config);
 
             for (int attempt = 0; attempt < generationAttempts; attempt++)
             {
-                List<PieceDefinition> selectedPieces = SelectPiecesForDifficulty(config);
+                List<PieceDefinition> selectedPieces = SelectPiecesForDifficulty(config, targetBlocks);
                 if (selectedPieces == null || selectedPieces.Count == 0)
                 {
                     continue;
                 }
 
                 int totalBlocks = selectedPieces.Sum(p => p.BlockCount);
-                if (totalBlocks <= 0 || totalBlocks % TargetArea.RequiredHeight != 0)
+                if (totalBlocks != targetBlocks || totalBlocks % TargetArea.RequiredHeight != 0)
                 {
                     continue;
                 }
@@ -289,17 +290,12 @@ namespace Ubongo
                     continue;
                 }
 
-                levelData = new LevelData
-                {
-                    LevelNumber = levelNumber,
-                    Difficulty = difficulty,
-                    TimeLimit = config.TimeLimit,
-                    Pieces = selectedPieces,
-                    BoardSize = CalculateBoardSize(targetArea),
-                    TargetArea = targetArea,
-                    SolutionPlacements = solutionPlacements
-                };
+                levelData = CreateLevelData(levelNumber, difficulty, config.TimeLimit, selectedPieces, targetArea, solutionPlacements);
+                return true;
+            }
 
+            if (TryCreateSolvablePuzzleDeterministic(difficulty, levelNumber, config, targetBlocks, out levelData))
+            {
                 return true;
             }
 
@@ -309,15 +305,267 @@ namespace Ubongo
             return false;
         }
 
+        private bool TryCreateSolvablePuzzleDeterministic(
+            DifficultyLevel difficulty,
+            int levelNumber,
+            LevelDifficultyConfig config,
+            int targetBlocks,
+            out LevelData levelData)
+        {
+            levelData = null;
+
+            if (targetBlocks <= 0 || targetBlocks % TargetArea.RequiredHeight != 0)
+            {
+                return false;
+            }
+
+            int footprintSize = targetBlocks / TargetArea.RequiredHeight;
+            List<List<PieceDefinition>> candidates = BuildPieceCombinationCandidates(config, targetBlocks);
+            foreach (List<PieceDefinition> candidatePieces in candidates)
+            {
+                foreach (TargetArea targetArea in GetDeterministicTargetAreas(footprintSize, difficulty))
+                {
+                    if (targetArea == null || targetArea.TotalCells != targetBlocks)
+                    {
+                        continue;
+                    }
+
+                    if (!TryFindSolution(candidatePieces, targetArea, out List<SolutionPlacement> solutionPlacements))
+                    {
+                        continue;
+                    }
+
+                    levelData = CreateLevelData(levelNumber, difficulty, config.TimeLimit, candidatePieces, targetArea, solutionPlacements);
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private List<List<PieceDefinition>> BuildPieceCombinationCandidates(LevelDifficultyConfig config, int targetBlocks)
+        {
+            var candidates = new List<List<PieceDefinition>>();
+            var working = new List<PieceDefinition>();
+            BuildPieceCombinationCandidatesRecursive(0, 0, config, targetBlocks, working, candidates);
+            return candidates;
+        }
+
+        private void BuildPieceCombinationCandidatesRecursive(
+            int startIndex,
+            int currentBlocks,
+            LevelDifficultyConfig config,
+            int targetBlocks,
+            List<PieceDefinition> working,
+            List<List<PieceDefinition>> candidates)
+        {
+            if (working.Count > config.MaxPieces || currentBlocks > targetBlocks)
+            {
+                return;
+            }
+
+            if (working.Count >= config.MinPieces &&
+                working.Count <= config.MaxPieces &&
+                currentBlocks == targetBlocks)
+            {
+                candidates.Add(new List<PieceDefinition>(working));
+                return;
+            }
+
+            if (working.Count == config.MaxPieces)
+            {
+                return;
+            }
+
+            for (int i = startIndex; i < allPieces.Length; i++)
+            {
+                PieceDefinition piece = allPieces[i];
+                working.Add(piece);
+                BuildPieceCombinationCandidatesRecursive(i + 1, currentBlocks + piece.BlockCount, config, targetBlocks, working, candidates);
+                working.RemoveAt(working.Count - 1);
+            }
+        }
+
+        private int ResolveReachableTargetBlocks(LevelDifficultyConfig config)
+        {
+            List<int> reachableTotals = GetReachableBlockTotals(config);
+            if (reachableTotals.Count == 0)
+            {
+                return config.TargetBlocks;
+            }
+
+            int resolvedTarget = reachableTotals[0];
+            if (resolvedTarget != config.TargetBlocks)
+            {
+                Debug.LogWarning(
+                    $"[{nameof(LevelGenerator)}] TargetBlocks={config.TargetBlocks} is unreachable with current piece catalog for {config.Level}. " +
+                    $"Using reachable target={resolvedTarget}.");
+            }
+
+            return resolvedTarget;
+        }
+
+        private List<int> GetReachableBlockTotals(LevelDifficultyConfig config)
+        {
+            var totals = new HashSet<int>();
+            CollectReachableBlockTotals(0, 0, 0, config, totals);
+
+            return totals
+                .Where(total => total > 0 && total % TargetArea.RequiredHeight == 0)
+                .OrderBy(total => Mathf.Abs(total - config.TargetBlocks))
+                .ThenByDescending(total => total)
+                .ToList();
+        }
+
+        private void CollectReachableBlockTotals(
+            int startIndex,
+            int pieceCount,
+            int totalBlocks,
+            LevelDifficultyConfig config,
+            HashSet<int> totals)
+        {
+            if (pieceCount > config.MaxPieces)
+            {
+                return;
+            }
+
+            if (pieceCount >= config.MinPieces)
+            {
+                totals.Add(totalBlocks);
+            }
+
+            if (pieceCount == config.MaxPieces)
+            {
+                return;
+            }
+
+            for (int i = startIndex; i < allPieces.Length; i++)
+            {
+                CollectReachableBlockTotals(
+                    i + 1,
+                    pieceCount + 1,
+                    totalBlocks + allPieces[i].BlockCount,
+                    config,
+                    totals);
+            }
+        }
+
+        private IEnumerable<TargetArea> GetDeterministicTargetAreas(int footprintSize, DifficultyLevel difficulty)
+        {
+            var emitted = new HashSet<string>();
+
+            if (TryGetCandidateArea(CreateRectangularArea(footprintSize), footprintSize, emitted, out TargetArea rectangular))
+            {
+                yield return rectangular;
+            }
+
+            if (difficulty == DifficultyLevel.Hard || difficulty == DifficultyLevel.Expert)
+            {
+                if (TryGetCandidateArea(CreateLShapedArea(footprintSize), footprintSize, emitted, out TargetArea lShaped))
+                {
+                    yield return lShaped;
+                }
+
+                if (TryGetCandidateArea(CreateTShapedArea(footprintSize), footprintSize, emitted, out TargetArea tShaped))
+                {
+                    yield return tShaped;
+                }
+            }
+
+            // Easy uses fixed 12-block combinations where rectangular footprint can be unsatisfiable
+            // with the current piece catalog. Add a deterministic fallback shape for that case.
+            if (difficulty == DifficultyLevel.Easy &&
+                TryGetCandidateArea(CreateNotchedArea(footprintSize), footprintSize, emitted, out TargetArea notched))
+            {
+                yield return notched;
+            }
+        }
+
+        private bool TryGetCandidateArea(
+            TargetArea candidate,
+            int expectedFootprintSize,
+            HashSet<string> emitted,
+            out TargetArea area)
+        {
+            area = null;
+            if (candidate == null || candidate.FootprintSize != expectedFootprintSize)
+            {
+                return false;
+            }
+
+            string key = string.Join(
+                ";",
+                candidate.GetColumnPositions()
+                    .OrderBy(position => position.x)
+                    .ThenBy(position => position.y)
+                    .Select(position => $"{position.x}:{position.y}"));
+
+            if (!emitted.Add(key))
+            {
+                return false;
+            }
+
+            area = candidate;
+            return true;
+        }
+
+        private TargetArea CreateNotchedArea(int footprintSize)
+        {
+            if (footprintSize < 6 || footprintSize % 2 != 0)
+            {
+                return null;
+            }
+
+            int depth = (footprintSize / 2) + 1;
+            if (depth < 4)
+            {
+                return null;
+            }
+
+            bool[,] mask = new bool[2, depth];
+            for (int x = 0; x < 2; x++)
+            {
+                for (int z = 0; z < depth; z++)
+                {
+                    mask[x, z] = true;
+                }
+            }
+
+            mask[0, depth - 1] = false;
+            mask[1, 1] = false;
+
+            TargetArea area = TargetArea.CreateFromMask(mask);
+            return area.FootprintSize == footprintSize ? area : null;
+        }
+
+        private LevelData CreateLevelData(
+            int levelNumber,
+            DifficultyLevel difficulty,
+            float timeLimit,
+            List<PieceDefinition> pieces,
+            TargetArea targetArea,
+            List<SolutionPlacement> solutionPlacements)
+        {
+            return new LevelData
+            {
+                LevelNumber = levelNumber,
+                Difficulty = difficulty,
+                TimeLimit = timeLimit,
+                Pieces = new List<PieceDefinition>(pieces),
+                BoardSize = CalculateBoardSize(targetArea),
+                TargetArea = targetArea,
+                SolutionPlacements = new List<SolutionPlacement>(solutionPlacements)
+            };
+        }
+
         /// <summary>
         /// Selects pieces based on difficulty configuration.
         /// </summary>
-        private List<PieceDefinition> SelectPiecesForDifficulty(LevelDifficultyConfig config)
+        private List<PieceDefinition> SelectPiecesForDifficulty(LevelDifficultyConfig config, int targetBlocks)
         {
             var selected = new List<PieceDefinition>();
             var availablePieces = new List<PieceDefinition>(allPieces);
             int currentBlocks = 0;
-            int targetBlocks = config.TargetBlocks;
 
             // Shuffle available pieces
             ShuffleList(availablePieces);
