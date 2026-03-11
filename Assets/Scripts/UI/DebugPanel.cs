@@ -328,7 +328,7 @@ namespace Ubongo
             if (difficultyDropdown != null)
             {
                 difficultyDropdown.ClearOptions();
-                difficultyDropdown.AddOptions(new System.Collections.Generic.List<string> { "Easy", "Medium", "Hard", "Custom" });
+                difficultyDropdown.AddOptions(new System.Collections.Generic.List<string> { "Easy", "Hard", "Custom" });
             }
 
             if (widthDropdown != null)
@@ -410,7 +410,7 @@ namespace Ubongo
 
         private void QuickGeneratePuzzle()
         {
-            AddLog("> Quick generating puzzle (Medium difficulty)...");
+            AddLog("> Quick generating puzzle (Easy difficulty)...");
             if (levelGenerator != null)
             {
                 levelGenerator.GenerateLevel(1);
@@ -596,7 +596,7 @@ namespace Ubongo
             {
                 return difficultyDropdown.options[difficultyDropdown.value].text;
             }
-            return "Medium";
+            return "Easy";
         }
 
         private int GetAvailableBlockCount()

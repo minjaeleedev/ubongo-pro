@@ -2,6 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Core;
 using Ubongo.Domain;
+using Ubongo.Domain.Board;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -44,7 +45,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject generatorObject = new GameObject("LevelGenerator_Test");
             LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
-            LevelData levelData = CreateManualLevelData(DifficultyLevel.Medium, 2);
+            LevelData levelData = CreateManualLevelData(DifficultyLevel.Hard, 2);
             generator.SpawnFromLevelData(levelData);
             int pieceCountBefore = CountPuzzlePiecesInScene();
             bool hadBoundsBefore = generator.TryGetSpawnedPiecesBounds(out Bounds boundsBefore);
@@ -68,7 +69,7 @@ namespace Ubongo.Tests.EditMode
         {
             GameObject generatorObject = new GameObject("LevelGenerator_Test");
             LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
-            LevelData levelData = CreateManualLevelData(DifficultyLevel.Medium, 2);
+            LevelData levelData = CreateManualLevelData(DifficultyLevel.Hard, 2);
             generator.SpawnFromLevelData(levelData);
             int pieceCountBefore = CountPuzzlePiecesInScene();
 
@@ -124,49 +125,87 @@ namespace Ubongo.Tests.EditMode
         }
 
         [Test]
-        public void TryCreateLevelData_WhenSuccessful_UsesRequiredHeightInBoardSize()
+        public void TryCreateLevelData_Easy_UsesConfiguredFootprintAndPieceCount()
         {
             GameObject generatorObject = new GameObject("LevelGenerator_Test");
             LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
 
-            bool generated = false;
-            LevelData levelData = null;
-            for (int attempt = 0; attempt < 3 && !generated; attempt++)
-            {
-                generated = generator.TryCreateLevelData(1, DifficultyLevel.Easy, out levelData);
-            }
+            bool generated = generator.TryCreateLevelData(1, DifficultyLevel.Easy, out LevelData levelData);
 
             Assert.IsTrue(generated, "Expected level generation to succeed for Easy difficulty.");
             Assert.IsNotNull(levelData);
             Assert.AreEqual(TargetArea.RequiredHeight, levelData.BoardSize.y);
+            Assert.That(levelData.TargetArea.FootprintSize, Is.InRange(6, 7));
+            Assert.AreEqual(3, levelData.Pieces.Count);
             Assert.AreEqual(levelData.TargetArea.TotalCells, levelData.Pieces.Sum(p => p.BlockCount));
+            Assert.IsFalse(IsSingleRowOrColumn(levelData.TargetArea));
+            Assert.Greater(levelData.Pieces.Select(piece => piece.BlockCount).Distinct().Count(), 1);
+            AssertSolutionExactlyFillsTarget(levelData);
 
             UnityEngine.Object.DestroyImmediate(generatorObject);
         }
 
         [Test]
-        public void TryCreateLevelData_Expert_UsesReachableBlockTotal()
+        public void TryCreateLevelData_Hard_UsesEightFootprintCellsAndFourPieces()
         {
             GameObject generatorObject = new GameObject("LevelGenerator_Test");
             LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
 
-            bool generated = false;
-            LevelData levelData = null;
-            for (int attempt = 0; attempt < 3 && !generated; attempt++)
-            {
-                generated = generator.TryCreateLevelData(1, DifficultyLevel.Expert, out levelData);
-            }
+            bool generated = generator.TryCreateLevelData(1, DifficultyLevel.Hard, out LevelData levelData);
 
-            Assert.IsTrue(generated, "Expected level generation to succeed for Expert difficulty.");
+            Assert.IsTrue(generated, "Expected level generation to succeed for Hard difficulty.");
             Assert.IsNotNull(levelData);
             Assert.AreEqual(TargetArea.RequiredHeight, levelData.BoardSize.y);
+            Assert.AreEqual(8, levelData.TargetArea.FootprintSize);
+            Assert.AreEqual(4, levelData.Pieces.Count);
 
             int totalBlocks = levelData.Pieces.Sum(piece => piece.BlockCount);
-            int targetBlocks = LevelDifficultyConfig.GetConfig(DifficultyLevel.Expert).TargetBlocks;
-            Assert.LessOrEqual(totalBlocks, targetBlocks);
+            Assert.AreEqual(16, totalBlocks);
             Assert.AreEqual(0, totalBlocks % TargetArea.RequiredHeight);
             Assert.AreEqual(levelData.TargetArea.TotalCells, totalBlocks);
+            AssertSolutionExactlyFillsTarget(levelData);
 
+            UnityEngine.Object.DestroyImmediate(generatorObject);
+        }
+
+        [Test]
+        public void TryCreateLevelData_WithCustomFootprintAndThreePieces_FillsTwoLayersWithoutGaps()
+        {
+            GameObject generatorObject = new GameObject("LevelGenerator_Test");
+            LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
+            TargetArea targetArea = CreateTargetAreaFromRows(
+                "xx.",
+                "xxx",
+                "xx.");
+
+            bool generated = generator.TryCreateLevelData(1, DifficultyLevel.Easy, targetArea, 3, out LevelData levelData);
+
+            Assert.IsTrue(generated, "Expected custom target generation to succeed.");
+            Assert.IsNotNull(levelData);
+            Assert.AreEqual(3, levelData.Pieces.Count);
+            Assert.AreEqual(targetArea.TotalCells, levelData.Pieces.Sum(piece => piece.BlockCount));
+            Assert.AreEqual(targetArea.Width, levelData.BoardSize.x);
+            Assert.AreEqual(TargetArea.RequiredHeight, levelData.BoardSize.y);
+            Assert.AreEqual(targetArea.Depth, levelData.BoardSize.z);
+            CollectionAssert.AreEquivalent(targetArea.GetAllCells(), levelData.TargetArea.GetAllCells());
+            AssertSolutionExactlyFillsTarget(levelData);
+
+            UnityEngine.Object.DestroyImmediate(generatorObject);
+        }
+
+        [Test]
+        public void TryCreateLevelData_WhenTwoCellPieceExists_IncludesComplexLargePiece()
+        {
+            GameObject generatorObject = new GameObject("LevelGenerator_Test");
+            LevelGenerator generator = generatorObject.AddComponent<LevelGenerator>();
+            TargetArea targetArea = CreateTargetAreaFromRows(
+                "x..",
+                "xx.",
+                "xxx");
+
+            Assert.IsTrue(generator.TryCreateLevelData(1, DifficultyLevel.Easy, targetArea, 3, out LevelData levelData));
+            Assert.IsTrue(levelData.Pieces.Any(piece => piece.BlockCount == 2));
+            Assert.IsTrue(levelData.Pieces.Any(piece => piece.BlockCount >= 5 && IsComplexPiece(piece.Blocks)));
             UnityEngine.Object.DestroyImmediate(generatorObject);
         }
 
@@ -188,6 +227,83 @@ namespace Ubongo.Tests.EditMode
         {
             PuzzlePiece[] pieces = UnityEngine.Object.FindObjectsByType<PuzzlePiece>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             return pieces.Length;
+        }
+
+        private static TargetArea CreateTargetAreaFromRows(params string[] rows)
+        {
+            Assert.IsNotNull(rows);
+            Assert.Greater(rows.Length, 0);
+
+            int width = rows[0].Length;
+            bool[,] mask = new bool[width, rows.Length];
+
+            for (int z = 0; z < rows.Length; z++)
+            {
+                Assert.AreEqual(width, rows[z].Length);
+                for (int x = 0; x < width; x++)
+                {
+                    mask[x, z] = rows[z][x] == 'x';
+                }
+            }
+
+            return TargetArea.CreateFromMask(mask);
+        }
+
+        private static bool IsSingleRowOrColumn(TargetArea targetArea)
+        {
+            List<Vector2Int> columns = targetArea.GetColumnPositions().ToList();
+            return columns.All(column => column.x == columns[0].x) ||
+                   columns.All(column => column.y == columns[0].y);
+        }
+
+        private static bool IsComplexPiece(IEnumerable<Vector3Int> blocks)
+        {
+            Vector3Int[] normalized = RotationUtil.NormalizeToOrigin(blocks.ToArray());
+            int maxX = normalized.Max(block => block.x) + 1;
+            int maxY = normalized.Max(block => block.y) + 1;
+            int maxZ = normalized.Max(block => block.z) + 1;
+            int varyingAxes = 0;
+            if (maxX > 1) varyingAxes++;
+            if (maxY > 1) varyingAxes++;
+            if (maxZ > 1) varyingAxes++;
+
+            bool isStraightLine = varyingAxes <= 1;
+            bool isSolidPrism = maxX * maxY * maxZ == normalized.Length;
+            return normalized.Length >= 5 && !isStraightLine && !isSolidPrism;
+        }
+
+        private static void AssertSolutionExactlyFillsTarget(LevelData levelData)
+        {
+            Assert.IsNotNull(levelData);
+            Assert.IsNotNull(levelData.TargetArea);
+            Assert.IsNotNull(levelData.Pieces);
+            Assert.IsNotNull(levelData.SolutionPlacements);
+            Assert.AreEqual(levelData.Pieces.Count, levelData.SolutionPlacements.Count);
+
+            BoardState board = new BoardState(levelData.BoardSize.x, levelData.BoardSize.y, levelData.BoardSize.z);
+            PuzzleValidator validator = new PuzzleValidator();
+
+            for (int i = 0; i < levelData.SolutionPlacements.Count; i++)
+            {
+                SolutionPlacement placement = levelData.SolutionPlacements[i];
+                PieceDefinition piece = levelData.Pieces[placement.PieceIndex];
+                Vector3Int[] rotatedBlocks = RotationUtil.RotatePiece(piece.Blocks, placement.RotationIndex);
+                List<Vector3Int> worldCells = rotatedBlocks
+                    .Select(block => placement.Position + block)
+                    .ToList();
+
+                ValidationResult placementResult = validator.ValidatePlacement(
+                    worldCells,
+                    board.CreateOccupancySnapshot(),
+                    levelData.TargetArea);
+
+                Assert.IsTrue(placementResult.IsValid, $"Expected piece {placement.PieceIndex} placement to be valid.");
+                Assert.IsTrue(board.TryPlace($"piece_{i}", worldCells), $"Expected piece {placement.PieceIndex} to place without collisions.");
+            }
+
+            BoardWinConditionService winConditionService = new BoardWinConditionService();
+            ValidationResult result = winConditionService.ValidateSolution(board, levelData.TargetArea);
+            Assert.IsTrue(result.IsSolved, "Expected generated solution to fill the full target area.");
         }
 
         private static void DestroyAllLevelGenerators()

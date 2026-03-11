@@ -1,5 +1,9 @@
 using NUnit.Framework;
+using System;
+using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.TestTools;
 using Ubongo.Application.Bootstrap;
@@ -16,6 +20,8 @@ namespace Ubongo.Tests.EditMode
         [SetUp]
         public void SetUp()
         {
+            CleanupRuntimeSingletonObjects();
+            EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
             CleanupRuntimeSingletonObjects();
             PlayerPrefs.DeleteKey(TestSettingsKey);
         }
@@ -125,72 +131,31 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void GameCompositionRoot_Awake_WithoutUIManager_FailsFast()
         {
-            GameObject managerObject = new GameObject("GameManager_Test");
-            managerObject.AddComponent<GameManager>();
-            GameObject roundObject = new GameObject("RoundManager_Test");
-            roundObject.AddComponent<RoundManager>();
-            GameObject gemObject = new GameObject("GemSystem_Test");
-            gemObject.AddComponent<GemSystem>();
-            GameObject difficultyObject = new GameObject("DifficultySystem_Test");
-            difficultyObject.AddComponent<DifficultySystem>();
-            GameObject tiebreakerObject = new GameObject("TiebreakerManager_Test");
-            tiebreakerObject.AddComponent<TiebreakerManager>();
-            GameObject inputObject = new GameObject("InputManager_Test");
-            inputObject.AddComponent<InputManager>();
-            GameObject levelGeneratorObject = new GameObject("LevelGenerator_Test");
-            levelGeneratorObject.AddComponent<LevelGenerator>();
+            DependencyFixtureBuilder.CreateBaseline().Remove<UIManager>();
+            AssertRequiredComponentCardinality(expectedUiManagers: 0, expectedGameBoards: 1);
 
-            LogAssert.Expect(LogType.Error, "[GameCompositionRoot] Expected exactly one UIManager in scene, but found 0.");
+            LogAssert.Expect(LogType.Error, new Regex(@"\[GameCompositionRoot\] Expected exactly one UIManager in scene, but found \d+\."));
             LogAssert.Expect(LogType.Exception, new Regex(@"\[GameCompositionRoot\] Runtime graph validation failed"));
 
             GameObject rootObject = new GameObject("GameCompositionRoot_Test");
             rootObject.AddComponent<GameCompositionRoot>();
 
             UnityEngine.Object.DestroyImmediate(rootObject);
-            UnityEngine.Object.DestroyImmediate(levelGeneratorObject);
-            UnityEngine.Object.DestroyImmediate(inputObject);
-            UnityEngine.Object.DestroyImmediate(tiebreakerObject);
-            UnityEngine.Object.DestroyImmediate(difficultyObject);
-            UnityEngine.Object.DestroyImmediate(gemObject);
-            UnityEngine.Object.DestroyImmediate(roundObject);
-            UnityEngine.Object.DestroyImmediate(managerObject);
         }
 
         [Test]
         public void GameCompositionRoot_Awake_WithoutGameBoard_FailsFast()
         {
-            GameObject managerObject = new GameObject("GameManager_Test");
-            managerObject.AddComponent<GameManager>();
-            GameObject roundObject = new GameObject("RoundManager_Test");
-            roundObject.AddComponent<RoundManager>();
-            GameObject gemObject = new GameObject("GemSystem_Test");
-            gemObject.AddComponent<GemSystem>();
-            GameObject difficultyObject = new GameObject("DifficultySystem_Test");
-            difficultyObject.AddComponent<DifficultySystem>();
-            GameObject tiebreakerObject = new GameObject("TiebreakerManager_Test");
-            tiebreakerObject.AddComponent<TiebreakerManager>();
-            GameObject inputObject = new GameObject("InputManager_Test");
-            inputObject.AddComponent<InputManager>();
-            GameObject levelGeneratorObject = new GameObject("LevelGenerator_Test");
-            levelGeneratorObject.AddComponent<LevelGenerator>();
-            GameObject uiObject = new GameObject("UIManager_Test");
-            uiObject.AddComponent<UIManager>();
+            DependencyFixtureBuilder.CreateBaseline().Remove<GameBoard>();
+            AssertRequiredComponentCardinality(expectedUiManagers: 1, expectedGameBoards: 0);
 
-            LogAssert.Expect(LogType.Error, "[GameCompositionRoot] Expected exactly one GameBoard in scene, but found 0.");
+            LogAssert.Expect(LogType.Error, new Regex(@"\[GameCompositionRoot\] Expected exactly one GameBoard in scene, but found \d+\."));
             LogAssert.Expect(LogType.Exception, new Regex(@"\[GameCompositionRoot\] Runtime graph validation failed"));
 
             GameObject rootObject = new GameObject("GameCompositionRoot_Test");
             rootObject.AddComponent<GameCompositionRoot>();
 
             UnityEngine.Object.DestroyImmediate(rootObject);
-            UnityEngine.Object.DestroyImmediate(uiObject);
-            UnityEngine.Object.DestroyImmediate(levelGeneratorObject);
-            UnityEngine.Object.DestroyImmediate(inputObject);
-            UnityEngine.Object.DestroyImmediate(tiebreakerObject);
-            UnityEngine.Object.DestroyImmediate(difficultyObject);
-            UnityEngine.Object.DestroyImmediate(gemObject);
-            UnityEngine.Object.DestroyImmediate(roundObject);
-            UnityEngine.Object.DestroyImmediate(managerObject);
         }
 
         private static void CleanupRuntimeSingletonObjects()
@@ -209,7 +174,7 @@ namespace Ubongo.Tests.EditMode
 
         private static void DestroyAllComponents<T>() where T : Component
         {
-            T[] components = UnityEngine.Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            T[] components = Resources.FindObjectsOfTypeAll<T>();
             foreach (T component in components)
             {
                 if (component == null)
@@ -217,7 +182,85 @@ namespace Ubongo.Tests.EditMode
                     continue;
                 }
 
-                UnityEngine.Object.DestroyImmediate(component.gameObject);
+                GameObject target = component.gameObject;
+                if (target == null)
+                {
+                    continue;
+                }
+
+                if (EditorUtility.IsPersistent(target))
+                {
+                    continue;
+                }
+
+                if (!target.scene.IsValid() || !target.scene.isLoaded)
+                {
+                    continue;
+                }
+
+                UnityEngine.Object.DestroyImmediate(target);
+            }
+        }
+
+        private static int CountSceneComponents<T>() where T : Component
+        {
+            return UnityEngine.Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None).Length;
+        }
+
+        private static void AssertRequiredComponentCardinality(int expectedUiManagers, int expectedGameBoards)
+        {
+            Assert.AreEqual(0, CountSceneComponents<GameCompositionRoot>(), "Precondition failed: GameCompositionRoot should not exist before test trigger.");
+            Assert.AreEqual(1, CountSceneComponents<GameManager>(), "Precondition failed: expected exactly one GameManager.");
+            Assert.AreEqual(1, CountSceneComponents<RoundManager>(), "Precondition failed: expected exactly one RoundManager.");
+            Assert.AreEqual(1, CountSceneComponents<GemSystem>(), "Precondition failed: expected exactly one GemSystem.");
+            Assert.AreEqual(1, CountSceneComponents<DifficultySystem>(), "Precondition failed: expected exactly one DifficultySystem.");
+            Assert.AreEqual(1, CountSceneComponents<TiebreakerManager>(), "Precondition failed: expected exactly one TiebreakerManager.");
+            Assert.AreEqual(1, CountSceneComponents<InputManager>(), "Precondition failed: expected exactly one InputManager.");
+            Assert.AreEqual(1, CountSceneComponents<LevelGenerator>(), "Precondition failed: expected exactly one LevelGenerator.");
+            Assert.AreEqual(expectedUiManagers, CountSceneComponents<UIManager>(), $"Precondition failed: expected {expectedUiManagers} UIManager component(s).");
+            Assert.AreEqual(expectedGameBoards, CountSceneComponents<GameBoard>(), $"Precondition failed: expected {expectedGameBoards} GameBoard component(s).");
+        }
+
+        private sealed class DependencyFixtureBuilder
+        {
+            private readonly Dictionary<Type, Component> components = new Dictionary<Type, Component>();
+
+            public static DependencyFixtureBuilder CreateBaseline()
+            {
+                var builder = new DependencyFixtureBuilder();
+                builder.Add<GameManager>("GameManager_Test");
+                builder.Add<RoundManager>("RoundManager_Test");
+                builder.Add<GemSystem>("GemSystem_Test");
+                builder.Add<DifficultySystem>("DifficultySystem_Test");
+                builder.Add<TiebreakerManager>("TiebreakerManager_Test");
+                builder.Add<InputManager>("InputManager_Test");
+                builder.Add<LevelGenerator>("LevelGenerator_Test");
+                builder.Add<UIManager>("UIManager_Test");
+                builder.Add<GameBoard>("GameBoard_Test");
+                return builder;
+            }
+
+            public DependencyFixtureBuilder Remove<T>() where T : Component
+            {
+                Type key = typeof(T);
+                if (!components.TryGetValue(key, out Component component))
+                {
+                    return this;
+                }
+
+                if (component != null)
+                {
+                    UnityEngine.Object.DestroyImmediate(component.gameObject);
+                }
+
+                components.Remove(key);
+                return this;
+            }
+
+            private void Add<T>(string objectName) where T : Component
+            {
+                GameObject gameObject = new GameObject(objectName);
+                components[typeof(T)] = gameObject.AddComponent<T>();
             }
         }
 

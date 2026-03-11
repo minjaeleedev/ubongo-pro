@@ -8,10 +8,12 @@ namespace Ubongo.Application.Bootstrap
     /// <summary>
     /// Lightweight runtime composition root for wiring root-level services.
     /// </summary>
+    [ExecuteAlways]
     [DefaultExecutionOrder(-1000)]
     public sealed class GameCompositionRoot : MonoBehaviour
     {
         private static GameCompositionRoot _instance;
+        private bool hasBootstrapped;
 
         [SerializeField] private GameManager gameManager;
         [SerializeField] private RoundManager roundManager;
@@ -25,6 +27,23 @@ namespace Ubongo.Application.Bootstrap
 
         private void Awake()
         {
+            TryBootstrap();
+        }
+
+        private void OnEnable()
+        {
+            TryBootstrap();
+        }
+
+        private void TryBootstrap()
+        {
+            if (hasBootstrapped || !ShouldBootstrapInCurrentContext())
+            {
+                return;
+            }
+
+            hasBootstrapped = true;
+
             if (_instance != null && _instance != this)
             {
                 Debug.LogWarning($"[{nameof(GameCompositionRoot)}] Duplicate root detected. Destroying '{name}'.");
@@ -48,6 +67,11 @@ namespace Ubongo.Application.Bootstrap
             {
                 _instance = null;
             }
+        }
+
+        private static bool ShouldBootstrapInCurrentContext()
+        {
+            return UnityEngine.Application.isPlaying || UnityEngine.Application.isBatchMode;
         }
 
         private void ResolveRuntimeGraphOrThrow()
@@ -86,6 +110,13 @@ namespace Ubongo.Application.Bootstrap
 
         private bool TryResolveRequiredComponent<T>(ref T component) where T : Component
         {
+            // Prefer inspector-assigned references to avoid scene-wide lookups
+            // from execution-order timing differences during Awake.
+            if (component != null)
+            {
+                return true;
+            }
+
             T[] matches = UnityEngine.Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
             if (matches.Length != 1)
             {

@@ -8,9 +8,9 @@ namespace Ubongo.Tests.EditMode
         [Test]
         public void Format_WithDefaultValues_ReturnsExpectedText()
         {
-            string text = DifficultyDisplayFormatter.Format("Medium", 4);
+            string text = DifficultyDisplayFormatter.Format("Hard", 4);
 
-            Assert.AreEqual("Medium (4 pieces)", text);
+            Assert.AreEqual("Hard (4 pieces)", text);
         }
 
         [Test]

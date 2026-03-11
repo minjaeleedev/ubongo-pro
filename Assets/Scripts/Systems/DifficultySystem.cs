@@ -53,35 +53,15 @@ namespace Ubongo.Systems
                     solutionCount: 4,
                     scoreMultiplier: 1.0f
                 ),
-                DifficultyLevel.Medium => new DifficultyConfig(
-                    level: DifficultyLevel.Medium,
-                    displayName: "Medium",
-                    displayColor: new Color(1f, 0.9f, 0.2f),    // 노랑
-                    pieceCount: 4,
-                    boardSize: new Vector2Int(4, 3),
-                    timeLimit: 75f,
-                    solutionCount: 3,
-                    scoreMultiplier: 1.5f
-                ),
                 DifficultyLevel.Hard => new DifficultyConfig(
                     level: DifficultyLevel.Hard,
                     displayName: "Hard",
                     displayColor: new Color(0.2f, 0.4f, 0.9f),  // 파랑
-                    pieceCount: 5,
+                    pieceCount: 4,
                     boardSize: new Vector2Int(4, 4),
                     timeLimit: 60f,
                     solutionCount: 2,
                     scoreMultiplier: 2.0f
-                ),
-                DifficultyLevel.Expert => new DifficultyConfig(
-                    level: DifficultyLevel.Expert,
-                    displayName: "Expert",
-                    displayColor: new Color(0.9f, 0.2f, 0.2f),  // 빨강
-                    pieceCount: 6,
-                    boardSize: new Vector2Int(5, 4),
-                    timeLimit: 45f,
-                    solutionCount: 1,
-                    scoreMultiplier: 2.5f
                 ),
                 _ => CreateDefault(DifficultyLevel.Easy)
             };
@@ -111,9 +91,9 @@ namespace Ubongo.Systems
             int newSuccesses = ConsecutiveSuccesses + 1;
             DifficultyLevel newRecommended = RecommendedLevel;
 
-            if (newSuccesses >= 3 && (int)RecommendedLevel < (int)DifficultyLevel.Expert)
+            if (newSuccesses >= 3 && RecommendedLevel == DifficultyLevel.Easy)
             {
-                newRecommended = (DifficultyLevel)((int)RecommendedLevel + 1);
+                newRecommended = DifficultyLevel.Hard;
                 newSuccesses = 0;
             }
 
@@ -125,9 +105,9 @@ namespace Ubongo.Systems
             int newFailures = ConsecutiveFailures + 1;
             DifficultyLevel newRecommended = RecommendedLevel;
 
-            if (newFailures >= 2 && (int)RecommendedLevel > (int)DifficultyLevel.Easy)
+            if (newFailures >= 2 && RecommendedLevel == DifficultyLevel.Hard)
             {
-                newRecommended = (DifficultyLevel)((int)RecommendedLevel - 1);
+                newRecommended = DifficultyLevel.Easy;
                 newFailures = 0;
             }
 
@@ -173,8 +153,8 @@ namespace Ubongo.Systems
         public event Action<AdaptiveDifficultyState> OnAdaptiveStateChanged;
 
         // Properties
-        public DifficultyLevel CurrentDifficulty => _currentDifficulty;
-        public DifficultyConfig CurrentConfig => GetDifficultyConfig(_currentDifficulty);
+        public DifficultyLevel CurrentDifficulty => NormalizeDifficulty(_currentDifficulty);
+        public DifficultyConfig CurrentConfig => GetDifficultyConfig(CurrentDifficulty);
         public bool IsAdaptiveDifficultyEnabled => enableAdaptiveDifficulty;
         public AdaptiveDifficultyState AdaptiveState => _adaptiveState;
 
@@ -203,14 +183,33 @@ namespace Ubongo.Systems
             _adaptiveState = new AdaptiveDifficultyState(0, 0, DifficultyLevel.Easy);
         }
 
+        private void EnsureInitialized()
+        {
+            if (_configCache != null)
+            {
+                return;
+            }
+
+            InitializeDifficultySystem();
+        }
+
         /// <summary>
         /// 난이도 설정
         /// </summary>
         public void SetDifficulty(DifficultyLevel level)
         {
-            if (_currentDifficulty == level) return;
+            EnsureInitialized();
 
-            _currentDifficulty = level;
+            DifficultyLevel normalizedLevel = NormalizeDifficulty(level);
+            if (normalizedLevel != level)
+            {
+                Debug.LogWarning(
+                    $"[{nameof(DifficultySystem)}] Invalid difficulty '{(int)level}' received. Falling back to {normalizedLevel}.");
+            }
+
+            if (_currentDifficulty == normalizedLevel) return;
+
+            _currentDifficulty = normalizedLevel;
             OnDifficultyChanged?.Invoke(_currentDifficulty);
         }
 
@@ -219,11 +218,15 @@ namespace Ubongo.Systems
         /// </summary>
         public DifficultyConfig GetDifficultyConfig(DifficultyLevel level)
         {
-            if (_configCache.TryGetValue(level, out var config))
+            EnsureInitialized();
+
+            DifficultyLevel normalizedLevel = NormalizeDifficulty(level);
+            if (_configCache.TryGetValue(normalizedLevel, out var config))
             {
                 return config;
             }
-            return DifficultyConfig.CreateDefault(level);
+
+            return DifficultyConfig.CreateDefault(DifficultyLevel.Easy);
         }
 
         /// <summary>
@@ -231,6 +234,7 @@ namespace Ubongo.Systems
         /// </summary>
         public IReadOnlyDictionary<DifficultyLevel, DifficultyConfig> GetAllDifficultyConfigs()
         {
+            EnsureInitialized();
             return _configCache;
         }
 
@@ -239,6 +243,7 @@ namespace Ubongo.Systems
         /// </summary>
         public void SetAdaptiveDifficulty(bool enabled)
         {
+            EnsureInitialized();
             enableAdaptiveDifficulty = enabled;
         }
 
@@ -247,6 +252,7 @@ namespace Ubongo.Systems
         /// </summary>
         public void RecordRoundSuccess()
         {
+            EnsureInitialized();
             if (!enableAdaptiveDifficulty) return;
 
             _adaptiveState = _adaptiveState.RecordSuccess();
@@ -263,6 +269,7 @@ namespace Ubongo.Systems
         /// </summary>
         public void RecordRoundFailure()
         {
+            EnsureInitialized();
             if (!enableAdaptiveDifficulty) return;
 
             _adaptiveState = _adaptiveState.RecordFailure();
@@ -279,6 +286,7 @@ namespace Ubongo.Systems
         /// </summary>
         public void ResetAdaptiveState()
         {
+            EnsureInitialized();
             _adaptiveState = new AdaptiveDifficultyState(0, 0, _currentDifficulty);
             OnAdaptiveStateChanged?.Invoke(_adaptiveState);
         }
@@ -320,7 +328,7 @@ namespace Ubongo.Systems
         /// </summary>
         public static int ToInt(DifficultyLevel level)
         {
-            return (int)level;
+            return (int)NormalizeDifficulty(level);
         }
 
         /// <summary>
@@ -328,9 +336,18 @@ namespace Ubongo.Systems
         /// </summary>
         public static DifficultyLevel FromInt(int value)
         {
-            if (value < 1) return DifficultyLevel.Easy;
-            if (value > 4) return DifficultyLevel.Expert;
-            return (DifficultyLevel)value;
+            return NormalizeDifficulty((DifficultyLevel)value);
+        }
+
+        public static bool IsValidDifficulty(DifficultyLevel level)
+        {
+            return level == DifficultyLevel.Easy ||
+                   level == DifficultyLevel.Hard;
+        }
+
+        public static DifficultyLevel NormalizeDifficulty(DifficultyLevel level)
+        {
+            return IsValidDifficulty(level) ? level : DifficultyLevel.Easy;
         }
 
         /// <summary>

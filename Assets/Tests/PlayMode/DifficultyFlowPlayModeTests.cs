@@ -39,9 +39,9 @@ namespace Ubongo.Tests.PlayMode
             yield return WaitForRoundInProgress(roundManager, 1);
             AssertRoundRules(roundManager, difficultySystem, DifficultyLevel.Easy);
 
-            roundManager.StartNewGame(DifficultyLevel.Medium);
+            roundManager.StartNewGame(DifficultyLevel.Hard);
             yield return WaitForRoundInProgress(roundManager, 1);
-            AssertRoundRules(roundManager, difficultySystem, DifficultyLevel.Medium);
+            AssertRoundRules(roundManager, difficultySystem, DifficultyLevel.Hard);
 
             yield return DestroyAndWait(roundObject, difficultyObject, gemObject);
         }
@@ -84,6 +84,21 @@ namespace Ubongo.Tests.PlayMode
 
             manager.StartGame(DifficultyLevel.Easy);
             Assert.IsFalse(manager.EnableHints);
+
+            yield return DestroyAndWait(CombineObjects(managerObject, dependencies));
+        }
+
+        [UnityTest]
+        public IEnumerator GameManager_StartGame_WithInvalidDifficulty_FallsBackToEasy()
+        {
+            GameManager manager = CreateConfiguredGameManager(out GameObject managerObject, out GameObject[] dependencies);
+            yield return null;
+
+            manager.StartGame((DifficultyLevel)0);
+            yield return WaitForRoundInProgress(manager.RoundManager, 1);
+
+            Assert.AreEqual(DifficultyLevel.Easy, manager.CurrentDifficulty);
+            AssertRoundRules(manager.RoundManager, manager.DifficultySystem, DifficultyLevel.Easy);
 
             yield return DestroyAndWait(CombineObjects(managerObject, dependencies));
         }

@@ -27,8 +27,21 @@ namespace Ubongo.Tests.EditMode
             GameObject uiObject = new GameObject("UIManager_Test");
             UIManager uiManager = uiObject.AddComponent<UIManager>();
 
-            uiManager.SetDifficulty(DifficultyLevel.Expert);
-            Assert.AreEqual(DifficultyLevel.Expert, uiManager.CurrentDifficulty);
+            uiManager.SetDifficulty(DifficultyLevel.Hard);
+            Assert.AreEqual(DifficultyLevel.Hard, uiManager.CurrentDifficulty);
+
+            UnityEngine.Object.DestroyImmediate(uiObject);
+        }
+
+        [Test]
+        public void SetDifficulty_WhenInvalidValue_FallsBackToEasy()
+        {
+            GameObject uiObject = new GameObject("UIManager_Test");
+            UIManager uiManager = uiObject.AddComponent<UIManager>();
+
+            uiManager.SetDifficulty((DifficultyLevel)0);
+
+            Assert.AreEqual(DifficultyLevel.Easy, uiManager.CurrentDifficulty);
 
             UnityEngine.Object.DestroyImmediate(uiObject);
         }

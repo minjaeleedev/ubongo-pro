@@ -1,4 +1,5 @@
 using UnityEngine;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Ubongo.Core;
@@ -13,6 +14,9 @@ namespace Ubongo
     public class LevelDifficultyConfig
     {
         public DifficultyLevel Level;
+        public int PieceCount;
+        public int MinFootprintCells;
+        public int MaxFootprintCells;
         public int MinPieces;
         public int MaxPieces;
         public int TargetBlocks;
@@ -27,42 +31,28 @@ namespace Ubongo
                 DifficultyLevel.Easy => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Easy,
+                    PieceCount = 3,
+                    MinFootprintCells = 6,
+                    MaxFootprintCells = 7,
                     MinPieces = 3,
                     MaxPieces = 3,
-                    TargetBlocks = 12,
+                    TargetBlocks = 14,
                     TimeLimit = 90f,
                     MinSolutions = 6,
                     MaxSolutions = 20
                 },
-                DifficultyLevel.Medium => new LevelDifficultyConfig
-                {
-                    Level = DifficultyLevel.Medium,
-                    MinPieces = 4,
-                    MaxPieces = 4,
-                    TargetBlocks = 16,
-                    TimeLimit = 75f,
-                    MinSolutions = 4,
-                    MaxSolutions = 10
-                },
                 DifficultyLevel.Hard => new LevelDifficultyConfig
                 {
                     Level = DifficultyLevel.Hard,
+                    PieceCount = 4,
+                    MinFootprintCells = 8,
+                    MaxFootprintCells = 8,
                     MinPieces = 4,
-                    MaxPieces = 5,
-                    TargetBlocks = 20,
+                    MaxPieces = 4,
+                    TargetBlocks = 16,
                     TimeLimit = 60f,
                     MinSolutions = 3,
                     MaxSolutions = 6
-                },
-                DifficultyLevel.Expert => new LevelDifficultyConfig
-                {
-                    Level = DifficultyLevel.Expert,
-                    MinPieces = 5,
-                    MaxPieces = 6,
-                    TargetBlocks = 24,
-                    TimeLimit = 45f,
-                    MinSolutions = 2,
-                    MaxSolutions = 4
                 },
                 _ => GetConfig(DifficultyLevel.Easy)
             };
@@ -105,10 +95,89 @@ namespace Ubongo
     public class LevelGenerator : MonoBehaviour
     {
         private const int MinGenerationAttempts = 1;
-        private const int DefaultFootprintDepth = 2;
-        private const int MinFootprintDepth = 2;
-        private const int MaxFootprintDepth = 4;
+        private const int MinPieceCells = 2;
+        private const int PreferredSolutionSamplesPerSizeSet = 24;
         private const string PieceLayerName = "Piece";
+
+        private static readonly string[][] EasyFootprintPatterns =
+        {
+            new[] { "xxx", "xxx" },
+            new[] { "x..", "xx.", "xxx" },
+            new[] { "xx.", "xxx", ".x." },
+            new[] { "xxx", "x..", "xx." },
+            new[] { "xxxx", "xxx." },
+            new[] { "xx.", "xxx", "xx." },
+            new[] { ".xx", "xxx", "xx." },
+            new[] { "x..", "xx.", "xxx", ".x." }
+        };
+
+        private static readonly string[][] HardFootprintPatterns =
+        {
+            new[] { "xxxx", "xxxx" },
+            new[] { "xxx", "xxx", "xx." },
+            new[] { "xx.", "xxx", "xxx" },
+            new[] { "x..", "xx.", "xxx", ".xx" },
+            new[] { "xx..", "xxxx", ".xx." },
+            new[] { "xxx.", ".xxx", ".xx." }
+        };
+
+        private sealed class PartitionCandidate
+        {
+            public List<List<Vector3Int>> Partitions { get; }
+            public int Score { get; }
+
+            public PartitionCandidate(List<List<Vector3Int>> partitions, int score)
+            {
+                Partitions = partitions;
+                Score = score;
+            }
+        }
+
+        private sealed class PartitionSearchState
+        {
+            public int ExploredSolutions { get; set; }
+            public PartitionCandidate BestCandidate { get; set; }
+        }
+
+        private readonly struct PieceShapeProfile
+        {
+            public int BlockCount { get; }
+            public int SizeX { get; }
+            public int SizeY { get; }
+            public int SizeZ { get; }
+            public bool IsStraightLine { get; }
+            public bool IsSolidPrism { get; }
+            public bool HasVerticalVariation { get; }
+            public int BranchNodeCount { get; }
+            public string CanonicalKey { get; }
+            public bool IsComplexLargePiece =>
+                BlockCount >= 5 &&
+                !IsStraightLine &&
+                !IsSolidPrism &&
+                (HasVerticalVariation || BranchNodeCount > 0 || (SizeX > 1 && SizeZ > 1));
+
+            public PieceShapeProfile(
+                int blockCount,
+                int sizeX,
+                int sizeY,
+                int sizeZ,
+                bool isStraightLine,
+                bool isSolidPrism,
+                bool hasVerticalVariation,
+                int branchNodeCount,
+                string canonicalKey)
+            {
+                BlockCount = blockCount;
+                SizeX = sizeX;
+                SizeY = sizeY;
+                SizeZ = sizeZ;
+                IsStraightLine = isStraightLine;
+                IsSolidPrism = isSolidPrism;
+                HasVerticalVariation = hasVerticalVariation;
+                BranchNodeCount = branchNodeCount;
+                CanonicalKey = canonicalKey;
+            }
+        }
 
         [Header("Piece Spawn Settings")]
         [SerializeField] private GameObject piecePrefab;
@@ -223,6 +292,27 @@ namespace Ubongo
             return true;
         }
 
+        public bool TryCreateLevelData(int levelNumber, DifficultyLevel difficulty, TargetArea targetArea, int pieceCount, out LevelData levelData)
+        {
+            EnsurePiecesInitialized();
+
+            if (!TryCreateLevelDataForTargetArea(
+                    levelNumber,
+                    difficulty,
+                    LevelDifficultyConfig.GetConfig(difficulty).TimeLimit,
+                    targetArea,
+                    new List<int> { pieceCount },
+                    shufflePieceCounts: false,
+                    out levelData))
+            {
+                currentLevelData = null;
+                return false;
+            }
+
+            currentLevelData = levelData;
+            return true;
+        }
+
         /// <summary>
         /// Spawns pieces for the provided level payload.
         /// Contract: invalid payload is treated as no-op.
@@ -261,40 +351,37 @@ namespace Ubongo
 
             LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
             int generationAttempts = GetGenerationAttemptCount();
-            int targetBlocks = ResolveReachableTargetBlocks(config);
+
+            List<TargetArea> targetAreas = BuildAutomaticTargetAreas(difficulty);
+            if (targetAreas.Count == 0)
+            {
+                Debug.LogWarning($"[{nameof(LevelGenerator)}] No target area templates configured for {difficulty}.");
+                return false;
+            }
+
+            List<int> pieceCountCandidates = new List<int> { config.PieceCount };
+            List<TargetArea> shuffledTargetAreas = new List<TargetArea>(targetAreas);
+            ShuffleList(shuffledTargetAreas);
 
             for (int attempt = 0; attempt < generationAttempts; attempt++)
             {
-                List<PieceDefinition> selectedPieces = SelectPiecesForDifficulty(config, targetBlocks);
-                if (selectedPieces == null || selectedPieces.Count == 0)
+                TargetArea targetArea = shuffledTargetAreas[attempt % shuffledTargetAreas.Count];
+                if (!TryCreateLevelDataForTargetArea(
+                        levelNumber,
+                        difficulty,
+                        config.TimeLimit,
+                        targetArea,
+                        pieceCountCandidates,
+                        shufflePieceCounts: false,
+                        out levelData))
                 {
                     continue;
                 }
 
-                int totalBlocks = selectedPieces.Sum(p => p.BlockCount);
-                if (totalBlocks != targetBlocks || totalBlocks % TargetArea.RequiredHeight != 0)
-                {
-                    continue;
-                }
-
-                // Calculate target area dimensions (must fit required height exactly).
-                int footprintSize = totalBlocks / TargetArea.RequiredHeight;
-                TargetArea targetArea = CalculateTargetArea(footprintSize, difficulty);
-                if (targetArea == null || targetArea.TotalCells != totalBlocks)
-                {
-                    continue;
-                }
-
-                if (!TryFindSolution(selectedPieces, targetArea, out List<SolutionPlacement> solutionPlacements))
-                {
-                    continue;
-                }
-
-                levelData = CreateLevelData(levelNumber, difficulty, config.TimeLimit, selectedPieces, targetArea, solutionPlacements);
                 return true;
             }
 
-            if (TryCreateSolvablePuzzleDeterministic(difficulty, levelNumber, config, targetBlocks, out levelData))
+            if (TryCreateSolvablePuzzleDeterministic(difficulty, levelNumber, config, targetAreas, out levelData))
             {
                 return true;
             }
@@ -309,35 +396,80 @@ namespace Ubongo
             DifficultyLevel difficulty,
             int levelNumber,
             LevelDifficultyConfig config,
-            int targetBlocks,
+            IReadOnlyList<TargetArea> targetAreas,
             out LevelData levelData)
         {
             levelData = null;
 
-            if (targetBlocks <= 0 || targetBlocks % TargetArea.RequiredHeight != 0)
+            if (targetAreas == null || targetAreas.Count == 0)
             {
                 return false;
             }
 
-            int footprintSize = targetBlocks / TargetArea.RequiredHeight;
-            List<List<PieceDefinition>> candidates = BuildPieceCombinationCandidates(config, targetBlocks);
-            foreach (List<PieceDefinition> candidatePieces in candidates)
+            List<int> pieceCountCandidates = new List<int> { config.PieceCount };
+            foreach (TargetArea targetArea in targetAreas)
             {
-                foreach (TargetArea targetArea in GetDeterministicTargetAreas(footprintSize, difficulty))
+                if (!TryCreateLevelDataForTargetArea(
+                        levelNumber,
+                        difficulty,
+                        config.TimeLimit,
+                        targetArea,
+                        pieceCountCandidates,
+                        shufflePieceCounts: false,
+                        out levelData))
                 {
-                    if (targetArea == null || targetArea.TotalCells != targetBlocks)
-                    {
-                        continue;
-                    }
-
-                    if (!TryFindSolution(candidatePieces, targetArea, out List<SolutionPlacement> solutionPlacements))
-                    {
-                        continue;
-                    }
-
-                    levelData = CreateLevelData(levelNumber, difficulty, config.TimeLimit, candidatePieces, targetArea, solutionPlacements);
-                    return true;
+                    continue;
                 }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool TryCreateLevelDataForTargetArea(
+            int levelNumber,
+            DifficultyLevel difficulty,
+            float timeLimit,
+            TargetArea targetArea,
+            IReadOnlyList<int> pieceCountCandidates,
+            bool shufflePieceCounts,
+            out LevelData levelData)
+        {
+            levelData = null;
+
+            TargetArea normalizedTargetArea = NormalizeTargetAreaToOrigin(targetArea);
+            if (normalizedTargetArea == null || normalizedTargetArea.FootprintSize == 0)
+            {
+                return false;
+            }
+
+            if (pieceCountCandidates == null || pieceCountCandidates.Count == 0)
+            {
+                return false;
+            }
+
+            List<int> candidateCounts = new List<int>(pieceCountCandidates.Where(count => count > 0 && count <= normalizedTargetArea.TotalCells));
+            if (candidateCounts.Count == 0)
+            {
+                return false;
+            }
+
+            if (shufflePieceCounts)
+            {
+                ShuffleList(candidateCounts);
+            }
+
+            for (int i = 0; i < candidateCounts.Count; i++)
+            {
+                int pieceCount = candidateCounts[i];
+                if (!TryPartitionTargetArea(normalizedTargetArea, pieceCount, out List<PieceDefinition> pieces, out List<SolutionPlacement> solutionPlacements))
+                {
+                    continue;
+                }
+
+                levelData = CreateLevelData(levelNumber, difficulty, timeLimit, pieces, normalizedTargetArea, solutionPlacements);
+                return true;
             }
 
             return false;
@@ -450,92 +582,141 @@ namespace Ubongo
             }
         }
 
-        private IEnumerable<TargetArea> GetDeterministicTargetAreas(int footprintSize, DifficultyLevel difficulty)
+        private List<TargetArea> BuildAutomaticTargetAreas(DifficultyLevel difficulty)
         {
+            string[][] sourcePatterns = difficulty switch
+            {
+                DifficultyLevel.Easy => EasyFootprintPatterns,
+                DifficultyLevel.Hard => HardFootprintPatterns,
+                _ => Array.Empty<string[]>()
+            };
+
+            var areas = new List<TargetArea>();
             var emitted = new HashSet<string>();
 
-            if (TryGetCandidateArea(CreateRectangularArea(footprintSize), footprintSize, emitted, out TargetArea rectangular))
+            for (int i = 0; i < sourcePatterns.Length; i++)
             {
-                yield return rectangular;
-            }
-
-            if (difficulty == DifficultyLevel.Hard || difficulty == DifficultyLevel.Expert)
-            {
-                if (TryGetCandidateArea(CreateLShapedArea(footprintSize), footprintSize, emitted, out TargetArea lShaped))
+                TargetArea candidate = CreateTargetAreaFromRows(sourcePatterns[i]);
+                if (candidate == null || !IsAutomaticTargetAreaValid(candidate, difficulty))
                 {
-                    yield return lShaped;
+                    continue;
                 }
 
-                if (TryGetCandidateArea(CreateTShapedArea(footprintSize), footprintSize, emitted, out TargetArea tShaped))
+                string key = GetTargetAreaKey(candidate);
+                if (!emitted.Add(key))
                 {
-                    yield return tShaped;
+                    continue;
                 }
+
+                areas.Add(candidate);
             }
 
-            // Easy uses fixed 12-block combinations where rectangular footprint can be unsatisfiable
-            // with the current piece catalog. Add a deterministic fallback shape for that case.
-            if (difficulty == DifficultyLevel.Easy &&
-                TryGetCandidateArea(CreateNotchedArea(footprintSize), footprintSize, emitted, out TargetArea notched))
-            {
-                yield return notched;
-            }
+            return areas;
         }
 
-        private bool TryGetCandidateArea(
-            TargetArea candidate,
-            int expectedFootprintSize,
-            HashSet<string> emitted,
-            out TargetArea area)
+        private bool IsAutomaticTargetAreaValid(TargetArea targetArea, DifficultyLevel difficulty)
         {
-            area = null;
-            if (candidate == null || candidate.FootprintSize != expectedFootprintSize)
+            if (targetArea == null)
             {
                 return false;
             }
 
-            string key = string.Join(
-                ";",
-                candidate.GetColumnPositions()
-                    .OrderBy(position => position.x)
-                    .ThenBy(position => position.y)
-                    .Select(position => $"{position.x}:{position.y}"));
-
-            if (!emitted.Add(key))
+            LevelDifficultyConfig config = LevelDifficultyConfig.GetConfig(difficulty);
+            if (targetArea.FootprintSize < config.MinFootprintCells || targetArea.FootprintSize > config.MaxFootprintCells)
             {
                 return false;
             }
 
-            area = candidate;
+            if (IsSingleRowOrColumn(targetArea) || !AreFootprintColumnsConnected(targetArea))
+            {
+                return false;
+            }
+
             return true;
         }
 
-        private TargetArea CreateNotchedArea(int footprintSize)
+        private TargetArea CreateTargetAreaFromRows(IReadOnlyList<string> rows)
         {
-            if (footprintSize < 6 || footprintSize % 2 != 0)
+            if (rows == null || rows.Count == 0)
             {
                 return null;
             }
 
-            int depth = (footprintSize / 2) + 1;
-            if (depth < 4)
-            {
-                return null;
-            }
+            int width = rows.Max(row => row?.Length ?? 0);
+            bool[,] mask = new bool[width, rows.Count];
 
-            bool[,] mask = new bool[2, depth];
-            for (int x = 0; x < 2; x++)
+            for (int z = 0; z < rows.Count; z++)
             {
-                for (int z = 0; z < depth; z++)
+                string row = rows[z] ?? string.Empty;
+                for (int x = 0; x < row.Length; x++)
                 {
-                    mask[x, z] = true;
+                    mask[x, z] = row[x] == 'x' || row[x] == 'X';
                 }
             }
 
-            mask[0, depth - 1] = false;
-            mask[1, 1] = false;
+            return TargetArea.CreateFromMask(mask);
+        }
 
-            TargetArea area = TargetArea.CreateFromMask(mask);
-            return area.FootprintSize == footprintSize ? area : null;
+        private string GetTargetAreaKey(TargetArea targetArea)
+        {
+            return string.Join(
+                ";",
+                targetArea.GetColumnPositions()
+                    .OrderBy(position => position.x)
+                    .ThenBy(position => position.y)
+                    .Select(position => $"{position.x}:{position.y}"));
+        }
+
+        private bool IsSingleRowOrColumn(TargetArea targetArea)
+        {
+            List<Vector2Int> columns = targetArea.GetColumnPositions().ToList();
+            if (columns.Count <= 1)
+            {
+                return true;
+            }
+
+            bool singleRow = columns.All(position => position.y == columns[0].y);
+            bool singleColumn = columns.All(position => position.x == columns[0].x);
+            return singleRow || singleColumn;
+        }
+
+        private bool AreFootprintColumnsConnected(TargetArea targetArea)
+        {
+            List<Vector2Int> columns = targetArea.GetColumnPositions().ToList();
+            if (columns.Count == 0)
+            {
+                return false;
+            }
+
+            var remaining = new HashSet<Vector2Int>(columns);
+            var queue = new Queue<Vector2Int>();
+            Vector2Int start = columns[0];
+            queue.Enqueue(start);
+            remaining.Remove(start);
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+                Vector2Int[] neighbors =
+                {
+                    new Vector2Int(current.x + 1, current.y),
+                    new Vector2Int(current.x - 1, current.y),
+                    new Vector2Int(current.x, current.y + 1),
+                    new Vector2Int(current.x, current.y - 1)
+                };
+
+                for (int i = 0; i < neighbors.Length; i++)
+                {
+                    if (!remaining.Remove(neighbors[i]))
+                    {
+                        continue;
+                    }
+
+                    queue.Enqueue(neighbors[i]);
+                }
+            }
+
+            return remaining.Count == 0;
         }
 
         private LevelData CreateLevelData(
@@ -556,6 +737,816 @@ namespace Ubongo
                 TargetArea = targetArea,
                 SolutionPlacements = new List<SolutionPlacement>(solutionPlacements)
             };
+        }
+
+        private List<int> GetPieceCountCandidates(LevelDifficultyConfig config, int totalBlocks)
+        {
+            var candidates = new List<int>();
+            if (config == null || totalBlocks <= 0)
+            {
+                return candidates;
+            }
+
+            for (int pieceCount = config.MinPieces; pieceCount <= config.MaxPieces; pieceCount++)
+            {
+                if (pieceCount <= 0 || pieceCount > totalBlocks)
+                {
+                    continue;
+                }
+
+                candidates.Add(pieceCount);
+            }
+
+            return candidates;
+        }
+
+        private TargetArea NormalizeTargetAreaToOrigin(TargetArea targetArea)
+        {
+            if (targetArea == null)
+            {
+                return null;
+            }
+
+            List<Vector2Int> columns = targetArea.GetColumnPositions().ToList();
+            if (columns.Count == 0)
+            {
+                return new TargetArea();
+            }
+
+            int minX = columns.Min(column => column.x);
+            int minZ = columns.Min(column => column.y);
+
+            if (minX == 0 && minZ == 0)
+            {
+                return targetArea.Clone();
+            }
+
+            return new TargetArea(columns.Select(column => new Vector2Int(column.x - minX, column.y - minZ)));
+        }
+
+        private bool TryPartitionTargetArea(
+            TargetArea targetArea,
+            int pieceCount,
+            out List<PieceDefinition> pieces,
+            out List<SolutionPlacement> solutionPlacements)
+        {
+            pieces = null;
+            solutionPlacements = null;
+
+            if (targetArea == null || pieceCount <= 0)
+            {
+                return false;
+            }
+
+            List<Vector3Int> allCells = targetArea
+                .GetAllCells()
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+                .ThenBy(cell => cell.z)
+                .ToList();
+
+            if (allCells.Count == 0 || pieceCount > allCells.Count)
+            {
+                return false;
+            }
+
+            List<List<int>> pieceSizeCandidates = BuildPieceSizeCandidates(allCells.Count, pieceCount);
+            PartitionCandidate bestCandidate = null;
+
+            for (int i = 0; i < pieceSizeCandidates.Count; i++)
+            {
+                PartitionSearchState searchState = FindBestPartitionForSizes(allCells, pieceSizeCandidates[i]);
+                if (searchState.BestCandidate == null)
+                {
+                    continue;
+                }
+
+                if (bestCandidate == null || searchState.BestCandidate.Score > bestCandidate.Score)
+                {
+                    bestCandidate = searchState.BestCandidate;
+                }
+            }
+
+            if (bestCandidate == null)
+            {
+                return false;
+            }
+
+            BuildGeneratedPieces(bestCandidate.Partitions, out pieces, out solutionPlacements);
+            return true;
+        }
+
+        private List<List<int>> BuildPieceSizeCandidates(int totalCells, int pieceCount)
+        {
+            var candidates = new List<List<int>>();
+            if (pieceCount <= 0 || totalCells < pieceCount * MinPieceCells)
+            {
+                return candidates;
+            }
+
+            BuildPieceSizeCandidatesRecursive(totalCells, pieceCount, totalCells, new List<int>(), candidates);
+
+            return candidates
+                .Where(IsPieceSizeCandidateValid)
+                .OrderByDescending(EvaluatePieceSizeCandidate)
+                .ThenByDescending(sizes => sizes.Max())
+                .ToList();
+        }
+
+        private void BuildPieceSizeCandidatesRecursive(
+            int remainingCells,
+            int remainingPieces,
+            int maxNextSize,
+            List<int> working,
+            List<List<int>> candidates)
+        {
+            if (remainingPieces == 0)
+            {
+                if (remainingCells == 0)
+                {
+                    candidates.Add(new List<int>(working));
+                }
+
+                return;
+            }
+
+            int minRequiredForRest = (remainingPieces - 1) * MinPieceCells;
+            int upperBound = Mathf.Min(maxNextSize, remainingCells - minRequiredForRest);
+            for (int nextSize = upperBound; nextSize >= MinPieceCells; nextSize--)
+            {
+                working.Add(nextSize);
+                BuildPieceSizeCandidatesRecursive(
+                    remainingCells - nextSize,
+                    remainingPieces - 1,
+                    nextSize,
+                    working,
+                    candidates);
+                working.RemoveAt(working.Count - 1);
+            }
+        }
+
+        private bool IsPieceSizeCandidateValid(List<int> pieceSizes)
+        {
+            if (pieceSizes == null || pieceSizes.Count == 0)
+            {
+                return false;
+            }
+
+            if (pieceSizes.Any(size => size < MinPieceCells))
+            {
+                return false;
+            }
+
+            if (pieceSizes.Contains(2) && pieceSizes.Max() < 5)
+            {
+                return false;
+            }
+
+            return true;
+        }
+
+        private int EvaluatePieceSizeCandidate(List<int> pieceSizes)
+        {
+            if (!IsPieceSizeCandidateValid(pieceSizes))
+            {
+                return int.MinValue;
+            }
+
+            int distinctSizeCount = pieceSizes.Distinct().Count();
+            int sizeRange = pieceSizes[0] - pieceSizes[pieceSizes.Count - 1];
+            int score = 0;
+
+            score += distinctSizeCount * 12;
+            score += sizeRange * 6;
+
+            if (distinctSizeCount == 1)
+            {
+                score -= 40;
+            }
+
+            if (pieceSizes.Contains(2))
+            {
+                score += 8;
+            }
+
+            if (pieceSizes.Any(size => size >= 5))
+            {
+                score += 5;
+            }
+
+            return score;
+        }
+
+        private PartitionSearchState FindBestPartitionForSizes(List<Vector3Int> allCells, List<int> pieceSizes)
+        {
+            PartitionSearchState state = new PartitionSearchState();
+            TryPartitionCells(
+                new HashSet<Vector3Int>(allCells),
+                pieceSizes,
+                new List<List<Vector3Int>>(pieceSizes.Count),
+                state);
+            return state;
+        }
+
+        private void TryPartitionCells(
+            HashSet<Vector3Int> remainingCells,
+            List<int> remainingPieceSizes,
+            List<List<Vector3Int>> partitions,
+            PartitionSearchState state)
+        {
+            if (state == null || remainingPieceSizes == null || partitions == null)
+            {
+                return;
+            }
+
+            if (state.ExploredSolutions >= PreferredSolutionSamplesPerSizeSet)
+            {
+                return;
+            }
+
+            if (remainingPieceSizes.Count == 0)
+            {
+                if (remainingCells.Count == 0)
+                {
+                    EvaluatePartitionCandidate(partitions, state);
+                }
+
+                return;
+            }
+
+            if (remainingCells == null || remainingCells.Count == 0)
+            {
+                return;
+            }
+
+            int requiredCells = 0;
+            for (int i = 0; i < remainingPieceSizes.Count; i++)
+            {
+                requiredCells += remainingPieceSizes[i];
+            }
+
+            if (requiredCells != remainingCells.Count)
+            {
+                return;
+            }
+
+            int targetRegionSize = remainingPieceSizes[0];
+            if (remainingPieceSizes.Count == 1)
+            {
+                if (remainingCells.Count != targetRegionSize || !IsConnected(remainingCells))
+                {
+                    return;
+                }
+
+                partitions.Add(SortCells(remainingCells));
+                EvaluatePartitionCandidate(partitions, state);
+                partitions.RemoveAt(partitions.Count - 1);
+                return;
+            }
+
+            Vector3Int seed = GetFirstCell(remainingCells);
+            HashSet<Vector3Int> region = new HashSet<Vector3Int> { seed };
+            HashSet<Vector3Int> frontier = BuildFrontier(region, remainingCells);
+            TryGrowPartitionRegion(remainingCells, remainingPieceSizes, targetRegionSize, region, frontier, partitions, state);
+        }
+
+        private void TryGrowPartitionRegion(
+            HashSet<Vector3Int> remainingCells,
+            List<int> remainingPieceSizes,
+            int targetRegionSize,
+            HashSet<Vector3Int> region,
+            HashSet<Vector3Int> frontier,
+            List<List<Vector3Int>> partitions,
+            PartitionSearchState state)
+        {
+            if (state.ExploredSolutions >= PreferredSolutionSamplesPerSizeSet)
+            {
+                return;
+            }
+
+            if (region.Count == targetRegionSize)
+            {
+                HashSet<Vector3Int> leftover = new HashSet<Vector3Int>(remainingCells);
+                leftover.ExceptWith(region);
+
+                List<int> nextPieceSizes = remainingPieceSizes.Skip(1).ToList();
+                if (!CanRemainingCellsSupportPieces(leftover, nextPieceSizes))
+                {
+                    return;
+                }
+
+                partitions.Add(SortCells(region));
+                TryPartitionCells(leftover, nextPieceSizes, partitions, state);
+                partitions.RemoveAt(partitions.Count - 1);
+                return;
+            }
+
+            int remainingRequiredCells = 0;
+            for (int i = 1; i < remainingPieceSizes.Count; i++)
+            {
+                remainingRequiredCells += remainingPieceSizes[i];
+            }
+
+            if ((remainingCells.Count - region.Count) < remainingRequiredCells)
+            {
+                return;
+            }
+
+            if (GetReachableCellCount(region, remainingCells) < targetRegionSize)
+            {
+                return;
+            }
+
+            List<Vector3Int> orderedCandidates = frontier
+                .OrderByDescending(cell => ScorePartitionGrowthCandidate(cell, region, remainingCells))
+                .ThenBy(cell => CountAvailableNeighbors(cell, remainingCells))
+                .ThenBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+                .ThenBy(cell => cell.z)
+                .ToList();
+
+            for (int i = 0; i < orderedCandidates.Count; i++)
+            {
+                Vector3Int candidate = orderedCandidates[i];
+                if (!region.Add(candidate))
+                {
+                    continue;
+                }
+
+                HashSet<Vector3Int> nextFrontier = BuildFrontier(region, remainingCells);
+                TryGrowPartitionRegion(remainingCells, remainingPieceSizes, targetRegionSize, region, nextFrontier, partitions, state);
+                region.Remove(candidate);
+
+                if (state.ExploredSolutions >= PreferredSolutionSamplesPerSizeSet)
+                {
+                    return;
+                }
+            }
+        }
+
+        private int ScorePartitionGrowthCandidate(
+            Vector3Int candidate,
+            HashSet<Vector3Int> region,
+            HashSet<Vector3Int> availableCells)
+        {
+            int score = 0;
+            if (region.Any(cell => cell.y != candidate.y))
+            {
+                score += 6;
+            }
+
+            if (region.Any(cell => cell.x != candidate.x))
+            {
+                score += 3;
+            }
+
+            if (region.Any(cell => cell.z != candidate.z))
+            {
+                score += 3;
+            }
+
+            int neighborsInRegion = CountNeighbors(candidate, region);
+            if (neighborsInRegion == 1)
+            {
+                score += 4;
+            }
+            else if (neighborsInRegion == 2)
+            {
+                score += 1;
+            }
+
+            score -= CountAvailableNeighbors(candidate, availableCells);
+            return score;
+        }
+
+        private bool CanRemainingCellsSupportPieces(HashSet<Vector3Int> remainingCells, List<int> remainingPieceSizes)
+        {
+            if (remainingPieceSizes == null)
+            {
+                return false;
+            }
+
+            if (remainingPieceSizes.Count == 0)
+            {
+                return remainingCells == null || remainingCells.Count == 0;
+            }
+
+            if (remainingCells == null || remainingCells.Count == 0)
+            {
+                return false;
+            }
+
+            int requiredCells = 0;
+            int minPieceSize = int.MaxValue;
+            for (int i = 0; i < remainingPieceSizes.Count; i++)
+            {
+                requiredCells += remainingPieceSizes[i];
+                if (remainingPieceSizes[i] < minPieceSize)
+                {
+                    minPieceSize = remainingPieceSizes[i];
+                }
+            }
+
+            if (requiredCells != remainingCells.Count)
+            {
+                return false;
+            }
+
+            List<List<Vector3Int>> components = GetConnectedComponents(remainingCells);
+            if (components.Count > remainingPieceSizes.Count)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < components.Count; i++)
+            {
+                if (components[i].Count < minPieceSize)
+                {
+                    return false;
+                }
+            }
+
+            if (remainingPieceSizes.Count == 1)
+            {
+                return components.Count == 1 && components[0].Count == remainingPieceSizes[0];
+            }
+
+            return true;
+        }
+
+        private HashSet<Vector3Int> BuildFrontier(HashSet<Vector3Int> region, HashSet<Vector3Int> availableCells)
+        {
+            var frontier = new HashSet<Vector3Int>();
+            foreach (Vector3Int cell in region)
+            {
+                foreach (Vector3Int neighbor in GetAdjacentCells(cell))
+                {
+                    if (availableCells.Contains(neighbor) && !region.Contains(neighbor))
+                    {
+                        frontier.Add(neighbor);
+                    }
+                }
+            }
+
+            return frontier;
+        }
+
+        private int GetReachableCellCount(HashSet<Vector3Int> region, HashSet<Vector3Int> availableCells)
+        {
+            if (region == null || region.Count == 0 || availableCells == null || availableCells.Count == 0)
+            {
+                return 0;
+            }
+
+            Vector3Int start = GetFirstCell(region);
+            var visited = new HashSet<Vector3Int>();
+            var queue = new Queue<Vector3Int>();
+            queue.Enqueue(start);
+            visited.Add(start);
+
+            while (queue.Count > 0)
+            {
+                Vector3Int current = queue.Dequeue();
+                foreach (Vector3Int neighbor in GetAdjacentCells(current))
+                {
+                    if (!availableCells.Contains(neighbor) || !visited.Add(neighbor))
+                    {
+                        continue;
+                    }
+
+                    queue.Enqueue(neighbor);
+                }
+            }
+
+            return visited.Count;
+        }
+
+        private int CountNeighbors(Vector3Int cell, IEnumerable<Vector3Int> cells)
+        {
+            HashSet<Vector3Int> lookup = cells as HashSet<Vector3Int> ?? new HashSet<Vector3Int>(cells);
+            int count = 0;
+            foreach (Vector3Int neighbor in GetAdjacentCells(cell))
+            {
+                if (lookup.Contains(neighbor))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int CountAvailableNeighbors(Vector3Int cell, HashSet<Vector3Int> availableCells)
+        {
+            int count = 0;
+            foreach (Vector3Int neighbor in GetAdjacentCells(cell))
+            {
+                if (availableCells.Contains(neighbor))
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private bool IsConnected(HashSet<Vector3Int> cells)
+        {
+            if (cells == null || cells.Count == 0)
+            {
+                return false;
+            }
+
+            return GetReachableCellCount(cells, cells) == cells.Count;
+        }
+
+        private List<List<Vector3Int>> GetConnectedComponents(HashSet<Vector3Int> cells)
+        {
+            var components = new List<List<Vector3Int>>();
+            if (cells == null || cells.Count == 0)
+            {
+                return components;
+            }
+
+            var remaining = new HashSet<Vector3Int>(cells);
+            while (remaining.Count > 0)
+            {
+                Vector3Int start = GetFirstCell(remaining);
+                var component = new List<Vector3Int>();
+                var queue = new Queue<Vector3Int>();
+                queue.Enqueue(start);
+                remaining.Remove(start);
+
+                while (queue.Count > 0)
+                {
+                    Vector3Int current = queue.Dequeue();
+                    component.Add(current);
+
+                    foreach (Vector3Int neighbor in GetAdjacentCells(current))
+                    {
+                        if (!remaining.Remove(neighbor))
+                        {
+                            continue;
+                        }
+
+                        queue.Enqueue(neighbor);
+                    }
+                }
+
+                components.Add(SortCells(component));
+            }
+
+            return components;
+        }
+
+        private List<Vector3Int> SortCells(IEnumerable<Vector3Int> cells)
+        {
+            return cells
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+                .ThenBy(cell => cell.z)
+                .ToList();
+        }
+
+        private Vector3Int GetFirstCell(IEnumerable<Vector3Int> cells)
+        {
+            return cells
+                .OrderBy(cell => cell.x)
+                .ThenBy(cell => cell.y)
+                .ThenBy(cell => cell.z)
+                .First();
+        }
+
+        private IEnumerable<Vector3Int> GetAdjacentCells(Vector3Int cell)
+        {
+            yield return new Vector3Int(cell.x + 1, cell.y, cell.z);
+            yield return new Vector3Int(cell.x - 1, cell.y, cell.z);
+            yield return new Vector3Int(cell.x, cell.y + 1, cell.z);
+            yield return new Vector3Int(cell.x, cell.y - 1, cell.z);
+            yield return new Vector3Int(cell.x, cell.y, cell.z + 1);
+            yield return new Vector3Int(cell.x, cell.y, cell.z - 1);
+        }
+
+        private Vector3Int GetCellwiseMinimum(IEnumerable<Vector3Int> cells)
+        {
+            int minX = int.MaxValue;
+            int minY = int.MaxValue;
+            int minZ = int.MaxValue;
+
+            foreach (Vector3Int cell in cells)
+            {
+                if (cell.x < minX) minX = cell.x;
+                if (cell.y < minY) minY = cell.y;
+                if (cell.z < minZ) minZ = cell.z;
+            }
+
+            return new Vector3Int(minX, minY, minZ);
+        }
+
+        private void EvaluatePartitionCandidate(List<List<Vector3Int>> partitions, PartitionSearchState state)
+        {
+            state.ExploredSolutions++;
+
+            int score = ScorePartitionCandidate(partitions);
+            if (score == int.MinValue)
+            {
+                return;
+            }
+
+            if (state.BestCandidate != null && state.BestCandidate.Score >= score)
+            {
+                return;
+            }
+
+            List<List<Vector3Int>> snapshot = partitions
+                .Select(partition => SortCells(partition))
+                .ToList();
+            state.BestCandidate = new PartitionCandidate(snapshot, score);
+        }
+
+        private int ScorePartitionCandidate(List<List<Vector3Int>> partitions)
+        {
+            if (partitions == null || partitions.Count == 0)
+            {
+                return int.MinValue;
+            }
+
+            List<int> pieceSizes = partitions.Select(partition => partition.Count).OrderByDescending(size => size).ToList();
+            int score = EvaluatePieceSizeCandidate(pieceSizes);
+            if (score == int.MinValue)
+            {
+                return int.MinValue;
+            }
+
+            bool containsTwoCellPiece = false;
+            bool hasComplexLargePiece = false;
+            bool hasIrregularPiece = false;
+            var canonicalCounts = new Dictionary<string, int>();
+
+            for (int i = 0; i < partitions.Count; i++)
+            {
+                PieceShapeProfile profile = AnalyzePieceShape(partitions[i]);
+                containsTwoCellPiece |= profile.BlockCount == 2;
+                hasComplexLargePiece |= profile.IsComplexLargePiece;
+                hasIrregularPiece |= !profile.IsStraightLine && !profile.IsSolidPrism;
+
+                if (!canonicalCounts.TryAdd(profile.CanonicalKey, 1))
+                {
+                    canonicalCounts[profile.CanonicalKey]++;
+                }
+
+                score += ScorePieceShape(profile);
+            }
+
+            if (!hasIrregularPiece)
+            {
+                return int.MinValue;
+            }
+
+            if (containsTwoCellPiece && !hasComplexLargePiece)
+            {
+                return int.MinValue;
+            }
+
+            foreach (KeyValuePair<string, int> entry in canonicalCounts)
+            {
+                if (entry.Value > 1)
+                {
+                    score -= (entry.Value - 1) * 6;
+                }
+            }
+
+            return score;
+        }
+
+        private PieceShapeProfile AnalyzePieceShape(IEnumerable<Vector3Int> cells)
+        {
+            Vector3Int[] localBlocks = RotationUtil.NormalizeToOrigin(cells.ToArray());
+            int maxX = 0;
+            int maxY = 0;
+            int maxZ = 0;
+            for (int i = 0; i < localBlocks.Length; i++)
+            {
+                maxX = Mathf.Max(maxX, localBlocks[i].x);
+                maxY = Mathf.Max(maxY, localBlocks[i].y);
+                maxZ = Mathf.Max(maxZ, localBlocks[i].z);
+            }
+
+            int sizeX = maxX + 1;
+            int sizeY = maxY + 1;
+            int sizeZ = maxZ + 1;
+            int varyingAxes = 0;
+            if (sizeX > 1) varyingAxes++;
+            if (sizeY > 1) varyingAxes++;
+            if (sizeZ > 1) varyingAxes++;
+
+            HashSet<Vector3Int> cellSet = new HashSet<Vector3Int>(localBlocks);
+            int branchNodeCount = 0;
+            for (int i = 0; i < localBlocks.Length; i++)
+            {
+                if (CountNeighbors(localBlocks[i], cellSet) >= 3)
+                {
+                    branchNodeCount++;
+                }
+            }
+
+            string canonicalKey = string.Join(";", RotationUtil.GetCanonicalForm(localBlocks).Select(block => $"{block.x},{block.y},{block.z}"));
+            return new PieceShapeProfile(
+                localBlocks.Length,
+                sizeX,
+                sizeY,
+                sizeZ,
+                varyingAxes <= 1,
+                sizeX * sizeY * sizeZ == localBlocks.Length,
+                sizeY > 1,
+                branchNodeCount,
+                canonicalKey);
+        }
+
+        private int ScorePieceShape(PieceShapeProfile profile)
+        {
+            int score = 0;
+            if (profile.BlockCount == 2)
+            {
+                score += 3;
+            }
+
+            if (!profile.IsStraightLine)
+            {
+                score += 4;
+            }
+            else
+            {
+                score -= 8;
+            }
+
+            if (!profile.IsSolidPrism)
+            {
+                score += 6;
+            }
+            else if (profile.BlockCount >= 4)
+            {
+                score -= 10;
+            }
+
+            if (profile.HasVerticalVariation)
+            {
+                score += 4;
+            }
+
+            score += profile.BranchNodeCount * 2;
+
+            if (profile.BlockCount >= 5)
+            {
+                score += 4;
+            }
+
+            if (profile.IsComplexLargePiece)
+            {
+                score += 12;
+            }
+
+            return score;
+        }
+
+        private void BuildGeneratedPieces(
+            List<List<Vector3Int>> partitions,
+            out List<PieceDefinition> pieces,
+            out List<SolutionPlacement> solutionPlacements)
+        {
+            pieces = new List<PieceDefinition>(partitions.Count);
+            solutionPlacements = new List<SolutionPlacement>(partitions.Count);
+
+            for (int i = 0; i < partitions.Count; i++)
+            {
+                List<Vector3Int> cells = SortCells(partitions[i]);
+                Vector3Int origin = GetCellwiseMinimum(cells);
+                Vector3Int[] localBlocks = cells
+                    .Select(cell => cell - origin)
+                    .OrderBy(cell => cell.x)
+                    .ThenBy(cell => cell.y)
+                    .ThenBy(cell => cell.z)
+                    .ToArray();
+
+                pieces.Add(new PieceDefinition(
+                    $"generated_{i + 1}",
+                    $"Generated-{i + 1}",
+                    localBlocks,
+                    GetGeneratedPieceColor(i),
+                    0));
+
+                solutionPlacements.Add(new SolutionPlacement(i, 0, origin));
+            }
+        }
+
+        private Color GetGeneratedPieceColor(int index)
+        {
+            if (allPieces != null && allPieces.Length > 0)
+            {
+                return allPieces[index % allPieces.Length].DefaultColor;
+            }
+
+            return Color.white;
         }
 
         /// <summary>
@@ -616,33 +1607,16 @@ namespace Ubongo
         /// </summary>
         private TargetArea CalculateTargetArea(int footprintSize, DifficultyLevel difficulty)
         {
-            // Determine footprint width/depth (XZ plane) based on footprint size.
-            int footprintDepth = DefaultFootprintDepth;
-            int width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
-
-            // Adjust if necessary to match exact footprint
-            if (width * footprintDepth != footprintSize)
+            List<TargetArea> candidates = BuildAutomaticTargetAreas(difficulty);
+            for (int i = 0; i < candidates.Count; i++)
             {
-                // Try different configurations
-                for (int candidateDepth = MinFootprintDepth; candidateDepth <= MaxFootprintDepth; candidateDepth++)
+                if (candidates[i].FootprintSize == footprintSize)
                 {
-                    if (footprintSize % candidateDepth == 0)
-                    {
-                        footprintDepth = candidateDepth;
-                        width = footprintSize / candidateDepth;
-                        break;
-                    }
+                    return candidates[i];
                 }
             }
 
-            return difficulty switch
-            {
-                DifficultyLevel.Easy => TargetArea.CreateRectangular(width, footprintDepth),
-                DifficultyLevel.Medium => TargetArea.CreateRectangular(width, footprintDepth),
-                DifficultyLevel.Hard => CreateVariedTargetArea(footprintSize),
-                DifficultyLevel.Expert => CreateVariedTargetArea(footprintSize),
-                _ => TargetArea.CreateRectangular(width, footprintDepth)
-            };
+            return candidates.Count > 0 ? candidates[0] : null;
         }
 
         /// <summary>
@@ -650,67 +1624,22 @@ namespace Ubongo
         /// </summary>
         private TargetArea CreateVariedTargetArea(int footprintSize)
         {
-            int shapeType = Random.Range(0, 3);
-
-            return shapeType switch
-            {
-                0 => CreateRectangularArea(footprintSize),
-                1 => CreateLShapedArea(footprintSize),
-                2 => CreateTShapedArea(footprintSize),
-                _ => CreateRectangularArea(footprintSize)
-            };
+            return CalculateTargetArea(footprintSize, DifficultyLevel.Hard);
         }
 
         private TargetArea CreateRectangularArea(int footprintSize)
         {
-            int footprintDepth = DefaultFootprintDepth;
-            int width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
-
-            // Adjust to match exact footprint
-            while (width * footprintDepth < footprintSize && footprintDepth < MaxFootprintDepth)
-            {
-                footprintDepth++;
-                width = Mathf.CeilToInt((float)footprintSize / footprintDepth);
-            }
-
-            return TargetArea.CreateRectangular(width, footprintDepth);
+            return CalculateTargetArea(footprintSize, DifficultyLevel.Easy);
         }
 
         private TargetArea CreateLShapedArea(int footprintSize)
         {
-            // Simple L-shape calculation
-            int baseWidth = Mathf.CeilToInt(Mathf.Sqrt(footprintSize * 1.5f));
-            int baseDepth = Mathf.CeilToInt((float)footprintSize / baseWidth);
-
-            int cutWidth = baseWidth / 3;
-            int cutDepth = baseDepth / 2;
-
-            // Verify footprint size
-            int actualFootprint = (baseWidth * baseDepth) - (cutWidth * cutDepth);
-            if (actualFootprint != footprintSize)
-            {
-                return CreateRectangularArea(footprintSize);
-            }
-
-            return TargetArea.CreateLShaped(baseWidth, baseDepth, cutWidth, cutDepth);
+            return CalculateTargetArea(footprintSize, DifficultyLevel.Hard);
         }
 
         private TargetArea CreateTShapedArea(int footprintSize)
         {
-            // Simple T-shape calculation
-            int topWidth = Mathf.CeilToInt(Mathf.Sqrt(footprintSize));
-            int topDepth = 1;
-            int stemWidth = topWidth / 3;
-            if (stemWidth < 1) stemWidth = 1;
-            int stemDepth = (footprintSize - (topWidth * topDepth)) / stemWidth;
-
-            int actualFootprint = (topWidth * topDepth) + (stemWidth * stemDepth);
-            if (actualFootprint != footprintSize)
-            {
-                return CreateRectangularArea(footprintSize);
-            }
-
-            return TargetArea.CreateTShaped(topWidth, topDepth, stemWidth, stemDepth);
+            return CalculateTargetArea(footprintSize, DifficultyLevel.Hard);
         }
 
         private bool TryFindSolution(List<PieceDefinition> pieces, TargetArea targetArea, out List<SolutionPlacement> solutionPlacements)
@@ -849,22 +1778,12 @@ namespace Ubongo
         /// </summary>
         private DifficultyLevel GetDifficultyForLevel(int levelNumber)
         {
-            if (levelNumber <= 3)
+            if (levelNumber <= 4)
             {
                 return DifficultyLevel.Easy;
             }
-            else if (levelNumber <= 6)
-            {
-                return DifficultyLevel.Medium;
-            }
-            else if (levelNumber <= 9)
-            {
-                return DifficultyLevel.Hard;
-            }
-            else
-            {
-                return DifficultyLevel.Expert;
-            }
+
+            return DifficultyLevel.Hard;
         }
 
         /// <summary>
@@ -1065,7 +1984,7 @@ namespace Ubongo
             int n = list.Count;
             for (int i = n - 1; i > 0; i--)
             {
-                int j = Random.Range(0, i + 1);
+                int j = UnityEngine.Random.Range(0, i + 1);
                 T temp = list[i];
                 list[i] = list[j];
                 list[j] = temp;

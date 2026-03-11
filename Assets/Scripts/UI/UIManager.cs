@@ -78,10 +78,16 @@ namespace Ubongo
         public int CurrentGems => currentGems;
         public int TotalGems => totalGems;
         public int CurrentRound => currentRound;
-        public DifficultyLevel CurrentDifficulty => currentDifficulty;
+        public DifficultyLevel CurrentDifficulty => DifficultySystem.NormalizeDifficulty(currentDifficulty);
+
+        private void OnValidate()
+        {
+            NormalizeCurrentDifficulty("editor validation");
+        }
 
         private void Start()
         {
+            NormalizeCurrentDifficulty("startup");
             EnsureGameManagerConfigured();
             InitializeUI();
             SubscribeToEvents();
@@ -341,19 +347,19 @@ namespace Ubongo
         {
             if (difficultyText == null) return;
 
-            DifficultyConfig config = gameManager.DifficultySystem.GetDifficultyConfig(currentDifficulty);
+            DifficultyConfig config = gameManager.DifficultySystem.GetDifficultyConfig(CurrentDifficulty);
             difficultyText.text = DifficultyDisplayFormatter.Format(config.DisplayName, config.PieceCount);
         }
 
         public void SetDifficulty(DifficultyLevel difficulty)
         {
-            currentDifficulty = difficulty;
+            currentDifficulty = NormalizeDifficulty(difficulty, "SetDifficulty");
             UpdateDifficultyDisplay();
         }
 
         private void SyncDifficultyFromGameManager()
         {
-            currentDifficulty = gameManager.CurrentDifficulty;
+            currentDifficulty = NormalizeDifficulty(gameManager.CurrentDifficulty, "SyncDifficultyFromGameManager");
         }
 
         public void AddGems(int amount)
@@ -572,7 +578,8 @@ namespace Ubongo
         private void OnStartGame()
         {
             ResetRounds();
-            gameManager.StartGame(currentDifficulty);
+            NormalizeCurrentDifficulty("start game");
+            gameManager.StartGame(CurrentDifficulty);
         }
 
         private void OnPauseGame()
@@ -593,7 +600,8 @@ namespace Ubongo
         private void OnRetryGame()
         {
             ResetRounds();
-            gameManager.StartGame(currentDifficulty);
+            NormalizeCurrentDifficulty("retry game");
+            gameManager.StartGame(CurrentDifficulty);
         }
 
         private void OnReturnToMenu()
@@ -606,6 +614,23 @@ namespace Ubongo
         {
             NextRound();
             gameManager.NextLevel();
+        }
+
+        private void NormalizeCurrentDifficulty(string context)
+        {
+            currentDifficulty = NormalizeDifficulty(currentDifficulty, context);
+        }
+
+        private DifficultyLevel NormalizeDifficulty(DifficultyLevel difficulty, string context)
+        {
+            DifficultyLevel normalizedDifficulty = DifficultySystem.NormalizeDifficulty(difficulty);
+            if (normalizedDifficulty != difficulty)
+            {
+                Debug.LogWarning(
+                    $"[{nameof(UIManager)}] Invalid difficulty '{(int)difficulty}' detected during {context}. Falling back to {normalizedDifficulty}.");
+            }
+
+            return normalizedDifficulty;
         }
 
         private void OnQuitGame()

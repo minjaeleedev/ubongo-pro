@@ -9,6 +9,22 @@ namespace Ubongo
         private const string PieceLayerName = "Piece";
         private const string BoardLayerName = "Board";
 
+        public enum DebugActionType
+        {
+            Help,
+            ToggleDebugPanel,
+            ToggleGenerator,
+            ToggleRotation,
+            QuickGenerate,
+            AutoSolve,
+            StepSolution,
+            Export,
+            ToggleGrid,
+            ToggleWireframe,
+            ToggleStats,
+            ResetPuzzle,
+        }
+
         private static InputManager _instance;
         public static InputManager Instance
         {
@@ -71,6 +87,56 @@ namespace Ubongo
         public event Action OnToggleWireframe;
         public event Action OnToggleStats;
         public event Action OnResetPuzzle;
+
+        public bool ProcessDebugAction(DebugActionType actionType)
+        {
+            if (!isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            switch (actionType)
+            {
+                case DebugActionType.Help:
+                    OnToggleHelp?.Invoke();
+                    return true;
+                case DebugActionType.ToggleDebugPanel:
+                    OnToggleDebugPanel?.Invoke();
+                    return true;
+                case DebugActionType.ToggleGenerator:
+                    OnToggleGenerator?.Invoke();
+                    return true;
+                case DebugActionType.ToggleRotation:
+                    OnToggleRotation?.Invoke();
+                    return true;
+                case DebugActionType.QuickGenerate:
+                    OnQuickGenerate?.Invoke();
+                    return true;
+                case DebugActionType.AutoSolve:
+                    OnAutoSolve?.Invoke();
+                    return true;
+                case DebugActionType.StepSolution:
+                    OnStepSolution?.Invoke();
+                    return true;
+                case DebugActionType.Export:
+                    OnExport?.Invoke();
+                    return true;
+                case DebugActionType.ToggleGrid:
+                    OnToggleGrid?.Invoke();
+                    return true;
+                case DebugActionType.ToggleWireframe:
+                    OnToggleWireframe?.Invoke();
+                    return true;
+                case DebugActionType.ToggleStats:
+                    OnToggleStats?.Invoke();
+                    return true;
+                case DebugActionType.ResetPuzzle:
+                    OnResetPuzzle?.Invoke();
+                    return true;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(actionType), actionType, null);
+            }
+        }
 
         private void Awake()
         {
@@ -200,62 +266,62 @@ namespace Ubongo
 
         private void OnHelpPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleHelp?.Invoke();
+            ProcessDebugAction(DebugActionType.Help);
         }
 
         private void OnToggleDebugPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleDebugPanel?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleDebugPanel);
         }
 
         private void OnToggleGeneratorPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleGenerator?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleGenerator);
         }
 
         private void OnToggleRotationPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleRotation?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleRotation);
         }
 
         private void OnQuickGeneratePerformed(InputAction.CallbackContext ctx)
         {
-            OnQuickGenerate?.Invoke();
+            ProcessDebugAction(DebugActionType.QuickGenerate);
         }
 
         private void OnAutoSolvePerformed(InputAction.CallbackContext ctx)
         {
-            OnAutoSolve?.Invoke();
+            ProcessDebugAction(DebugActionType.AutoSolve);
         }
 
         private void OnStepSolutionPerformed(InputAction.CallbackContext ctx)
         {
-            OnStepSolution?.Invoke();
+            ProcessDebugAction(DebugActionType.StepSolution);
         }
 
         private void OnExportPerformed(InputAction.CallbackContext ctx)
         {
-            OnExport?.Invoke();
+            ProcessDebugAction(DebugActionType.Export);
         }
 
         private void OnToggleGridPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleGrid?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleGrid);
         }
 
         private void OnToggleWireframePerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleWireframe?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleWireframe);
         }
 
         private void OnToggleStatsPerformed(InputAction.CallbackContext ctx)
         {
-            OnToggleStats?.Invoke();
+            ProcessDebugAction(DebugActionType.ToggleStats);
         }
 
         private void OnResetPuzzlePerformed(InputAction.CallbackContext ctx)
         {
-            OnResetPuzzle?.Invoke();
+            ProcessDebugAction(DebugActionType.ResetPuzzle);
         }
 
         private void OnPointPerformed(InputAction.CallbackContext ctx)
