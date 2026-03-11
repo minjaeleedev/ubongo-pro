@@ -457,6 +457,11 @@ namespace Ubongo
             return mainCamera.ScreenPointToRay(currentPointerPosition);
         }
 
+        public void SetPointerPosition(Vector2 pointerPosition)
+        {
+            currentPointerPosition = pointerPosition;
+        }
+
         public Vector3 GetWorldPosition(float height = 0f)
         {
             if (mainCamera == null) return Vector3.zero;
