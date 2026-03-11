@@ -17,6 +17,8 @@ namespace Ubongo
         Placed
     }
 
+    // TODO: Rename/split this type into clearer interaction adapter and piece view
+    // responsibilities once placement flow is moved behind an application use case.
     public class PuzzlePiece : MonoBehaviour
     {
         private const string PieceLayerName = "Piece";

@@ -21,20 +21,26 @@ namespace Ubongo.Tests.PlayMode
             yield return null;
 
             board.SetTargetArea(TargetArea.CreateRectangular(board.Width, board.Depth));
-            BoardCell targetCell = board.GetCell(0, 0, 0);
+            FloorTileView targetCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(targetCell);
 
             Renderer renderer = targetCell.VisualRenderer;
             Assert.IsNotNull(renderer);
             Color baseColor = GetRendererColor(renderer);
 
-            targetCell.SetHighlight(true, true);
+            GameObject pieceObject = new GameObject("Piece");
+            PuzzlePiece piece = pieceObject.AddComponent<PuzzlePiece>();
+            piece.SetBlockPositions(new List<Vector3Int> { Vector3Int.zero });
+            yield return null;
+
+            board.HighlightValidPlacement(Vector3Int.zero, piece);
             Assert.IsFalse(AreColorsClose(baseColor, GetRendererColor(renderer)));
 
             board.ClearHighlights();
             yield return null;
             Assert.IsTrue(AreColorsClose(baseColor, GetRendererColor(renderer)));
 
+            Object.DestroyImmediate(pieceObject);
             Object.DestroyImmediate(boardObject);
         }
 
@@ -56,22 +62,19 @@ namespace Ubongo.Tests.PlayMode
             });
             yield return null;
 
-            BoardCell floorCell = board.GetCell(0, 0, 0);
-            BoardCell upperCell = board.GetCell(0, 1, 0);
+            FloorTileView floorCell = board.GetCell(0, 0, 0);
+            FloorTileView upperCell = board.GetCell(0, 1, 0);
             Assert.IsNotNull(floorCell);
-            Assert.IsNotNull(upperCell);
+            Assert.IsNull(upperCell);
 
             Renderer floorRenderer = floorCell.VisualRenderer;
-            Renderer upperRenderer = upperCell.VisualRenderer;
             Assert.IsNotNull(floorRenderer);
-            Assert.IsNotNull(upperRenderer);
 
             Color floorBaseColor = GetRendererColor(floorRenderer);
             board.HighlightValidPlacement(Vector3Int.zero, piece);
             yield return null;
 
             Assert.IsFalse(AreColorsClose(floorBaseColor, GetRendererColor(floorRenderer)));
-            Assert.IsFalse(upperRenderer.enabled);
 
             Object.DestroyImmediate(pieceObject);
             Object.DestroyImmediate(boardObject);
@@ -234,13 +237,13 @@ namespace Ubongo.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BoardCells_ShowExplicitGridOverlay_MatchingBoardFootprint()
+        public IEnumerator FloorTiles_ShowExplicitGridOverlay_MatchingBoardFootprint()
         {
             GameBoard board = CreateInitializedBoard();
             GameObject boardObject = board.gameObject;
             yield return null;
 
-            BoardCell floorCell = board.GetCell(0, 0, 0);
+            FloorTileView floorCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(floorCell);
 
             Transform floorOverlay = floorCell.transform.Find("GridOverlay");
@@ -254,13 +257,7 @@ namespace Ubongo.Tests.PlayMode
             float overlayWidth = Vector3.Distance(floorLine.GetPosition(0), floorLine.GetPosition(3));
             Assert.AreEqual(board.BoardFootprintSize, overlayWidth, 0.001f);
 
-            BoardCell upperCell = board.GetCell(0, 1, 0);
-            Assert.IsNotNull(upperCell);
-            Transform upperOverlay = upperCell.transform.Find("GridOverlay");
-            Assert.IsNotNull(upperOverlay);
-            LineRenderer upperLine = upperOverlay.GetComponent<LineRenderer>();
-            Assert.IsNotNull(upperLine);
-            Assert.IsFalse(upperLine.enabled);
+            Assert.IsNull(board.GetCell(0, 1, 0));
 
             Object.DestroyImmediate(boardObject);
         }
@@ -293,17 +290,23 @@ namespace Ubongo.Tests.PlayMode
             GameObject boardObject = board.gameObject;
             yield return null;
 
-            BoardCell floorCell = board.GetCell(0, 0, 0);
+            FloorTileView floorCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(floorCell);
             Renderer renderer = floorCell.VisualRenderer;
             Assert.IsNotNull(renderer);
 
             Color targetColor = GetRendererColor(renderer);
-            floorCell.SetHighlight(true, true);
+            GameObject pieceObject = new GameObject("Piece");
+            PuzzlePiece piece = pieceObject.AddComponent<PuzzlePiece>();
+            piece.SetBlockPositions(new List<Vector3Int> { Vector3Int.zero });
+            yield return null;
+
+            board.HighlightValidPlacement(Vector3Int.zero, piece);
             Color validColor = GetRendererColor(renderer);
 
             Assert.Greater(ColorDistance(targetColor, validColor), 0.35f);
 
+            Object.DestroyImmediate(pieceObject);
             Object.DestroyImmediate(boardObject);
         }
 
@@ -315,7 +318,7 @@ namespace Ubongo.Tests.PlayMode
             yield return null;
 
             board.InitializeGrid(new Vector3Int(6, TargetArea.RequiredHeight, 3));
-            BoardCell floorCell = board.GetCell(0, 0, 0);
+            FloorTileView floorCell = board.GetCell(0, 0, 0);
             Assert.IsNotNull(floorCell);
             Transform visualTransform = floorCell.transform.Find("Visual");
             Assert.IsNotNull(visualTransform);
@@ -339,6 +342,7 @@ namespace Ubongo.Tests.PlayMode
             GameObject boardObject = new GameObject("Board");
             GameBoard board = boardObject.AddComponent<GameBoard>();
             board.Construct(BoardRuntimeServices.CreateDefault());
+            board.InitializeGrid(new Vector3Int(4, TargetArea.RequiredHeight, 2));
             return board;
         }
 

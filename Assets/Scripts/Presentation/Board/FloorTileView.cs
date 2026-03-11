@@ -2,19 +2,14 @@ using UnityEngine;
 
 namespace Ubongo
 {
-    public class BoardCell : MonoBehaviour
+    public class FloorTileView : MonoBehaviour
     {
         private const string VisualChildName = "Visual";
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
-        private int x, y, z;
-        private bool isOccupied = false;
-        private bool isTarget = false;
-        private bool isHighlighted = false;
-        private bool isHighlightValid = true;
-        private PuzzlePiece occupyingPiece;
-        private string occupyingPieceId = string.Empty;
+        private int x;
+        private int z;
         private Renderer cellRenderer;
         private MaterialPropertyBlock colorPropertyBlock;
         private int colorPropertyId = -1;
@@ -27,22 +22,15 @@ namespace Ubongo
         [SerializeField] private Color highlightInvalidColor = new Color(1f, 0.2f, 0.2f, 0.6f);
         
         public int X => x;
-        public int Y => y;
         public int Z => z;
-        public bool IsOccupied => isOccupied;
-        public bool IsTarget => isTarget;
-        public PuzzlePiece OccupyingPiece => occupyingPiece;
-        public string OccupyingPieceId => occupyingPieceId;
         public Renderer VisualRenderer => cellRenderer;
-        
-        public void Initialize(int gridX, int gridY, int gridZ, GameBoard _)
+
+        public void Initialize(int gridX, int gridZ)
         {
             x = gridX;
-            y = gridY;
             z = gridZ;
-            
             cellRenderer = ResolveRenderer();
-            UpdateVisual();
+            Apply(new FloorTileVisualState(false, false, FloorTileHighlightMode.None));
         }
 
         private Renderer ResolveRenderer()
@@ -66,55 +54,26 @@ namespace Ubongo
             return GetComponentInChildren<Renderer>();
         }
         
-        public void SetAsTarget(bool target)
+        public void Apply(FloorTileVisualState state)
         {
-            isTarget = target;
-            UpdateVisual();
-        }
-        
-        public void SetOccupied(bool occupied, PuzzlePiece piece)
-        {
-            isOccupied = occupied;
-            occupyingPiece = piece;
-            occupyingPieceId = occupied && piece != null
-                ? piece.GetInstanceID().ToString()
-                : string.Empty;
-            if (occupied)
+            if (cellRenderer == null)
             {
-                isHighlighted = false;
-            }
-            UpdateVisual();
-        }
-        
-        public void SetHighlight(bool highlighted, bool valid)
-        {
-            isHighlighted = highlighted;
-            isHighlightValid = valid;
-            UpdateVisual();
-        }
-        
-        private void UpdateVisual()
-        {
-            if (cellRenderer == null) return;
-            if (y > 0)
-            {
-                cellRenderer.enabled = false;
                 return;
             }
 
-            if (isHighlighted)
+            if (state.HighlightMode != FloorTileHighlightMode.None)
             {
-                ApplyColor(isHighlightValid ? highlightValidColor : highlightInvalidColor);
+                ApplyColor(state.HighlightMode == FloorTileHighlightMode.Valid ? highlightValidColor : highlightInvalidColor);
                 cellRenderer.enabled = true;
                 return;
             }
 
-            if (isOccupied)
+            if (state.IsOccupied)
             {
                 ApplyColor(occupiedColor);
                 cellRenderer.enabled = false;
             }
-            else if (isTarget)
+            else if (state.IsTarget)
             {
                 ApplyColor(targetColor);
                 cellRenderer.enabled = true;
@@ -189,7 +148,7 @@ namespace Ubongo
             float distance = ColorDistance(targetColor, highlightValidColor);
             if (distance < 0.35f)
             {
-                Debug.LogWarning($"[{nameof(BoardCell)}] targetColor is too close to highlightValidColor (distance: {distance:0.00}).");
+                Debug.LogWarning($"[{nameof(FloorTileView)}] targetColor is too close to highlightValidColor (distance: {distance:0.00}).");
             }
         }
 

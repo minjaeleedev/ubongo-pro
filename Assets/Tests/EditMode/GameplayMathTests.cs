@@ -65,43 +65,33 @@ namespace Ubongo.Tests.EditMode
         }
 
         [Test]
-        public void BoardCell_UsesVisualChildRenderer_WhenAvailable()
+        public void FloorTileView_UsesVisualChildRenderer_WhenAvailable()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
-            EnsureBoardConstructed(board);
-
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             GameObject visualChild = GameObject.CreatePrimitive(PrimitiveType.Quad);
             visualChild.name = "Visual";
             visualChild.transform.SetParent(cellRoot.transform, false);
 
-            BoardCell cell = cellRoot.AddComponent<BoardCell>();
-            cell.Initialize(0, 0, 0, board);
+            FloorTileView cell = cellRoot.AddComponent<FloorTileView>();
+            cell.Initialize(0, 0);
 
             Assert.AreEqual(visualChild.GetComponent<Renderer>(), cell.VisualRenderer);
 
             Object.DestroyImmediate(cellRoot);
-            Object.DestroyImmediate(boardObject);
         }
 
         [Test]
-        public void BoardCell_FallsBackToRootRenderer_WhenVisualChildMissing()
+        public void FloorTileView_FallsBackToRootRenderer_WhenVisualChildMissing()
         {
-            GameObject boardObject = new GameObject("Board");
-            GameBoard board = boardObject.AddComponent<GameBoard>();
-            EnsureBoardConstructed(board);
-
             GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Renderer rootRenderer = cellRoot.GetComponent<Renderer>();
 
-            BoardCell cell = cellRoot.AddComponent<BoardCell>();
-            cell.Initialize(0, 0, 0, board);
+            FloorTileView cell = cellRoot.AddComponent<FloorTileView>();
+            cell.Initialize(0, 0);
 
             Assert.AreEqual(rootRenderer, cell.VisualRenderer);
 
             Object.DestroyImmediate(cellRoot);
-            Object.DestroyImmediate(boardObject);
         }
 
         [Test]
@@ -185,16 +175,6 @@ namespace Ubongo.Tests.EditMode
                     .ThenBy(position => position.y)
                     .ThenBy(position => position.z)
                     .Select(position => $"{position.x},{position.y},{position.z}"));
-        }
-
-        private static void EnsureBoardConstructed(GameBoard board)
-        {
-            if (board == null || board.IsConstructed)
-            {
-                return;
-            }
-
-            board.Construct(BoardRuntimeServices.CreateDefault());
         }
     }
 }

@@ -33,7 +33,7 @@ namespace Ubongo.Tests.EditMode
             Assert.AreEqual(1, board.Width);
             Assert.AreEqual(1, board.Depth);
             Assert.IsNotNull(board.GetCell(0, 0, 0));
-            Assert.IsNotNull(board.GetCell(0, 1, 0));
+            Assert.IsNull(board.GetCell(0, 1, 0));
             Assert.IsNull(board.GetCell(1, 0, 0));
         }
 
@@ -45,7 +45,7 @@ namespace Ubongo.Tests.EditMode
             board.InitializeGrid(new Vector3Int(3, TargetArea.RequiredHeight + 5, 2));
 
             Assert.AreEqual(TargetArea.RequiredHeight, board.Height);
-            Assert.IsNotNull(board.GetCell(0, TargetArea.RequiredHeight - 1, 0));
+            Assert.IsNull(board.GetCell(0, TargetArea.RequiredHeight - 1, 0));
             Assert.IsNull(board.GetCell(0, TargetArea.RequiredHeight, 0));
         }
 
