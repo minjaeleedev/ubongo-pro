@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using Ubongo.Application.Placement;
 using Ubongo.Core;
 using Ubongo.Domain.Board;
 
@@ -29,7 +30,7 @@ namespace Ubongo
 
     // TODO: Rename/split this type into a clearer board presentation adapter once
     // placement orchestration is moved fully behind an application-facing port.
-    public class GameBoard : MonoBehaviour
+    public class GameBoard : MonoBehaviour, IBoardPlacementPort
     {
         private const int MinimumBoardDimension = 1;
         private const string BoardLayerName = "Board";
@@ -73,6 +74,8 @@ namespace Ubongo
         public float BoardFootprintSize => cellSize * boardFootprintRatio;
         public TargetArea CurrentTargetArea => targetArea;
         public bool IsConstructed => isConstructed;
+        public BoardState State => boardState;
+
         public event Action<FillState> OnFillStateChanged;
         public event Action OnPuzzleSolved;
 
@@ -238,6 +241,59 @@ namespace Ubongo
             ClearHighlights();
             RefreshFloorVisuals();
             NotifyFillStateChanged();
+        }
+
+        bool IBoardPlacementPort.TryPlace(string pieceId, IReadOnlyList<Vector3Int> worldCells)
+        {
+            EnsureConstructedOrThrow();
+
+            if (boardState == null || string.IsNullOrWhiteSpace(pieceId) || worldCells == null)
+            {
+                return false;
+            }
+
+            if (!boardState.TryPlace(pieceId, worldCells))
+            {
+                return false;
+            }
+
+            TrackPlacedCells(pieceId, null, worldCells);
+            RefreshFloorVisuals();
+            NotifyFillStateChanged();
+            CheckWinCondition();
+            return true;
+        }
+
+        bool IBoardPlacementPort.TryRemove(string pieceId, out IReadOnlyList<Vector3Int> removedCells)
+        {
+            EnsureConstructedOrThrow();
+
+            if (boardState == null)
+            {
+                removedCells = null;
+                return false;
+            }
+
+            if (!boardState.Remove(pieceId, out removedCells) || removedCells == null)
+            {
+                return false;
+            }
+
+            ClearTrackedCells(removedCells);
+            RefreshFloorVisuals();
+            NotifyFillStateChanged();
+            return true;
+        }
+
+        FillState IBoardPlacementPort.GetFillState(TargetArea placementTargetArea)
+        {
+            EnsureConstructedOrThrow();
+            if (boardState == null || placementTargetArea == null)
+            {
+                return new FillState(0, 0, 0);
+            }
+
+            return winConditionService.CalculateFillState(boardState, placementTargetArea);
         }
 
         public FillState GetFillState()
