@@ -92,7 +92,9 @@ namespace Ubongo.Tests.PlayMode
             InputManager inputManager = inputObject.AddComponent<InputManager>();
             yield return null;
 
-            Ray pointerRay = inputManager.GetPointerRay();
+            Vector2 pointerPosition = camera.pixelRect.center;
+            inputManager.SetPointerPosition(pointerPosition);
+            Ray pointerRay = camera.ScreenPointToRay(pointerPosition);
 
             GameBoard board = CreateInitializedBoard();
             GameObject boardObject = board.gameObject;
@@ -103,6 +105,7 @@ namespace Ubongo.Tests.PlayMode
             blocker.transform.position = pointerRay.origin + (pointerRay.direction * 3f);
             blocker.transform.localScale = new Vector3(0.6f, 0.6f, 0.6f);
 
+            inputManager.SetPointerPosition(pointerPosition);
             bool hitBoard = inputManager.TryGetBoardHit(out RaycastHit hit);
             Assert.IsTrue(hitBoard);
             Assert.IsNotNull(hit.collider);
