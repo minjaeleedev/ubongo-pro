@@ -51,5 +51,31 @@ namespace Ubongo.Tests.EditMode
             Assert.IsTrue(result.IsSolved);
             Assert.AreEqual(0, result.ErrorCount);
         }
+
+        [Test]
+        public void ValidateSolution_ShapedTargetArea_SolvesWhenOnlyTargetCellsFilled()
+        {
+            // L-shaped: 3x3 bounding box with 2x2 corner cut = 7 footprint cells
+            TargetArea target = TargetArea.CreateLShaped(3, 3, 2, 1);
+            BoardState board = new BoardState(3, TargetArea.RequiredHeight, 3);
+            BoardWinConditionService service = new BoardWinConditionService();
+
+            // Fill only the 7 target columns × 2 layers
+            int pieceIndex = 0;
+            foreach (Vector2Int col in target.GetColumnPositions())
+            {
+                board.TryPlace(
+                    $"piece_{pieceIndex++}",
+                    new List<Vector3Int>
+                    {
+                        new Vector3Int(col.x, 0, col.y),
+                        new Vector3Int(col.x, 1, col.y)
+                    });
+            }
+
+            ValidationResult result = service.ValidateSolution(board, target);
+
+            Assert.IsTrue(result.IsSolved);
+        }
     }
 }

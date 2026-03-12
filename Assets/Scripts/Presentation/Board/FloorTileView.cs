@@ -8,11 +8,15 @@ namespace Ubongo
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
 
+        private const string GridOverlayChildName = "GridOverlay";
+
         private int x;
         private int z;
         private Renderer cellRenderer;
         private MaterialPropertyBlock colorPropertyBlock;
         private int colorPropertyId = -1;
+        private Transform gridOverlayTransform;
+        private BoxCollider tileCollider;
         
         [Header("Visual Feedback")]
         [SerializeField] private Color baseColor = new Color(0.34f, 0.4f, 0.5f, 0.5f);
@@ -30,6 +34,8 @@ namespace Ubongo
             x = gridX;
             z = gridZ;
             cellRenderer = ResolveRenderer();
+            gridOverlayTransform = transform.Find(GridOverlayChildName);
+            tileCollider = GetComponent<BoxCollider>();
             Apply(new FloorTileVisualState(false, false, FloorTileHighlightMode.None));
         }
 
@@ -61,14 +67,14 @@ namespace Ubongo
                 return;
             }
 
+            bool shouldBeActive = state.IsTarget || state.IsOccupied || state.HighlightMode != FloorTileHighlightMode.None;
+
             if (state.HighlightMode != FloorTileHighlightMode.None)
             {
                 ApplyColor(state.HighlightMode == FloorTileHighlightMode.Valid ? highlightValidColor : highlightInvalidColor);
                 cellRenderer.enabled = true;
-                return;
             }
-
-            if (state.IsOccupied)
+            else if (state.IsOccupied)
             {
                 ApplyColor(occupiedColor);
                 cellRenderer.enabled = false;
@@ -81,7 +87,26 @@ namespace Ubongo
             else
             {
                 ApplyColor(baseColor);
-                cellRenderer.enabled = true;
+                cellRenderer.enabled = false;
+            }
+
+            SetGridOverlayActive(shouldBeActive);
+            SetColliderEnabled(shouldBeActive);
+        }
+
+        private void SetGridOverlayActive(bool active)
+        {
+            if (gridOverlayTransform != null)
+            {
+                gridOverlayTransform.gameObject.SetActive(active);
+            }
+        }
+
+        private void SetColliderEnabled(bool enabled)
+        {
+            if (tileCollider != null)
+            {
+                tileCollider.enabled = enabled;
             }
         }
 
