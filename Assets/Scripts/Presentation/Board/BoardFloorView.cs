@@ -110,7 +110,11 @@ namespace Ubongo
 
         public void Dispose()
         {
-            Debug.Log($"[RoundFlow] BoardFloorView.Dispose: hasContainer={boardContainer != null}, containerId={boardContainer?.GetInstanceID() ?? 0}");
+            if (boardContainer != null)
+            {
+                boardContainer.SetActive(false);
+            }
+
             NullifyGridOverlayMaterials();
             DestroyBoardContainer();
             if (gridLineMaterial != null)
@@ -203,6 +207,7 @@ namespace Ubongo
                 ? UnityEngine.Object.Instantiate(cellPrefab, boardContainer.transform)
                 : CreateDefaultTile();
 
+            tileObject.transform.SetParent(boardContainer.transform, false);
             tileObject.transform.localPosition = position;
             tileObject.name = $"Cell_{x}_0_{z}";
             ApplyBoardLayer(tileObject);
