@@ -96,5 +96,39 @@ namespace Ubongo.Tests.EditMode
 
             Assert.IsFalse(tileCollider.enabled);
         }
+
+        [Test]
+        public void Apply_OccupiedAndTarget_RaisesGridOverlayAboveBaseY()
+        {
+            float baseY = gridOverlay.transform.localPosition.y;
+
+            tile.Apply(new FloorTileVisualState(true, true, FloorTileHighlightMode.None));
+
+            Assert.Greater(gridOverlay.transform.localPosition.y, baseY,
+                "Grid overlay should be raised above base Y when occupied and target");
+        }
+
+        [Test]
+        public void Apply_OccupiedAndTarget_ThenUnoccupied_RestoresGridOverlayBaseY()
+        {
+            float baseY = gridOverlay.transform.localPosition.y;
+
+            tile.Apply(new FloorTileVisualState(true, true, FloorTileHighlightMode.None));
+            tile.Apply(new FloorTileVisualState(true, false, FloorTileHighlightMode.None));
+
+            Assert.That(gridOverlay.transform.localPosition.y, Is.EqualTo(baseY).Within(0.001f),
+                "Grid overlay should return to base Y when no longer occupied");
+        }
+
+        [Test]
+        public void Apply_OccupiedButNotTarget_DoesNotRaiseGridOverlay()
+        {
+            float baseY = gridOverlay.transform.localPosition.y;
+
+            tile.Apply(new FloorTileVisualState(false, true, FloorTileHighlightMode.None));
+
+            Assert.That(gridOverlay.transform.localPosition.y, Is.EqualTo(baseY).Within(0.001f),
+                "Grid overlay should not be raised when occupied but not target");
+        }
     }
 }

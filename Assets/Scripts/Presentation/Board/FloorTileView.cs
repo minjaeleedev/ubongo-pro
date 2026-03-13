@@ -10,12 +10,15 @@ namespace Ubongo
 
         private const string GridOverlayChildName = "GridOverlay";
 
+        private const float OccupiedGridYOffset = 0.45f;
+
         private int x;
         private int z;
         private Renderer cellRenderer;
         private MaterialPropertyBlock colorPropertyBlock;
         private int colorPropertyId = -1;
         private Transform gridOverlayTransform;
+        private float baseGridOverlayY;
         private BoxCollider tileCollider;
         
         [Header("Visual Feedback")]
@@ -35,6 +38,7 @@ namespace Ubongo
             z = gridZ;
             cellRenderer = ResolveRenderer();
             gridOverlayTransform = transform.Find(GridOverlayChildName);
+            baseGridOverlayY = gridOverlayTransform != null ? gridOverlayTransform.localPosition.y : 0f;
             tileCollider = GetComponent<BoxCollider>();
             Apply(new FloorTileVisualState(false, false, FloorTileHighlightMode.None));
         }
@@ -91,6 +95,7 @@ namespace Ubongo
             }
 
             SetGridOverlayActive(shouldBeActive);
+            AdjustGridOverlayHeight(state.IsOccupied && state.IsTarget);
             SetColliderEnabled(shouldBeActive);
         }
 
@@ -99,6 +104,21 @@ namespace Ubongo
             if (gridOverlayTransform != null)
             {
                 gridOverlayTransform.gameObject.SetActive(active);
+            }
+        }
+
+        private void AdjustGridOverlayHeight(bool raiseAboveBlock)
+        {
+            if (gridOverlayTransform == null)
+            {
+                return;
+            }
+
+            Vector3 pos = gridOverlayTransform.localPosition;
+            float targetY = raiseAboveBlock ? OccupiedGridYOffset : baseGridOverlayY;
+            if (!Mathf.Approximately(pos.y, targetY))
+            {
+                gridOverlayTransform.localPosition = new Vector3(pos.x, targetY, pos.z);
             }
         }
 
