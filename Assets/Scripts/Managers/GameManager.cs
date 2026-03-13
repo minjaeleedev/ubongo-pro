@@ -564,6 +564,7 @@ namespace Ubongo
 
         private void HandleRoundStarted(int round)
         {
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameManager.HandleRoundStarted: round={round}");
             ClearSolutionPreview();
             EnsureRuntimeDependenciesConfigured();
 
@@ -573,13 +574,16 @@ namespace Ubongo
                 return;
             }
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameManager.HandleRoundStarted: calling InitializeGrid size={levelData.BoardSize}");
             gameBoard.InitializeGrid(levelData.BoardSize);
             gameBoard.SetTargetArea(levelData.TargetArea);
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameManager.HandleRoundStarted: targetArea set, calling SpawnFromLevelData pieceCount={levelData.Pieces.Count}");
             ConfigureGameplayView();
             levelGenerator.SpawnFromLevelData(levelData);
             ConfigureGameplayView();
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameManager.HandleRoundStarted: round={round} setup complete");
             ChangeState(GameState.Playing);
         }
 
@@ -876,6 +880,8 @@ namespace Ubongo
 
         private void ClearSolutionPreview()
         {
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameManager.ClearSolutionPreview: hasContainer={solutionPreviewContainer != null}");
+
             if (solutionPreviewCoroutine != null)
             {
                 StopCoroutine(solutionPreviewCoroutine);

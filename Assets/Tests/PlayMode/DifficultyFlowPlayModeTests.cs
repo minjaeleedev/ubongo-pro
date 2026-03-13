@@ -185,6 +185,52 @@ namespace Ubongo.Tests.PlayMode
                 uiManagerObject);
         }
 
+        [UnityTest]
+        public IEnumerator StartNextRound_CalledDuringTransition_DoesNotDoubleStart()
+        {
+            GameObject difficultyObject = new GameObject("DifficultySystem_Test");
+            DifficultySystem difficultySystem = difficultyObject.AddComponent<DifficultySystem>();
+            GameObject gemObject = new GameObject("GemSystem_Test");
+            GemSystem gemSystem = gemObject.AddComponent<GemSystem>();
+            GameObject roundObject = new GameObject("RoundManager_Test");
+            RoundManager roundManager = roundObject.AddComponent<RoundManager>();
+            roundManager.ConfigureRuntimeDependencies(difficultySystem, gemSystem);
+            yield return null;
+
+            int roundStartedCount = 0;
+            roundManager.OnRoundStarted += _ => roundStartedCount++;
+
+            roundManager.StartNewGame(DifficultyLevel.Easy);
+            yield return WaitForRoundInProgress(roundManager, 1);
+            Assert.AreEqual(1, roundStartedCount);
+
+            // Round 1 완료 → TransitionToNextRound 코루틴 시작 (state=Transitioning)
+            roundManager.CompleteRound();
+            Assert.AreEqual(RoundState.Transitioning, roundManager.CurrentState);
+
+            // transition delay 중에 수동으로 StartNextRound 호출
+            roundManager.StartNextRound();
+            yield return WaitForRoundInProgress(roundManager, 2);
+            Assert.AreEqual(2, roundStartedCount, "Round 2 should start only once");
+
+            // transition 코루틴의 delay가 지나도 Round 3가 시작되지 않아야 함
+            float elapsed = 0f;
+            int roundBefore = roundManager.CurrentRound;
+            while (elapsed < 3f)
+            {
+                if (roundManager.CurrentRound != roundBefore)
+                {
+                    Assert.Fail($"Round unexpectedly advanced to {roundManager.CurrentRound}");
+                }
+                elapsed += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.AreEqual(2, roundManager.CurrentRound);
+
+            yield return DestroyAndWait(roundObject, difficultyObject, gemObject);
+        }
+
         private static IEnumerator WaitForRoundInProgress(RoundManager roundManager, int expectedRound, float timeoutSeconds = 2f)
         {
             float elapsed = 0f;
