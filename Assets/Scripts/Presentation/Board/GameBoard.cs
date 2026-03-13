@@ -103,8 +103,6 @@ namespace Ubongo
         {
             EnsureConstructedOrThrow();
 
-            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameBoard.InitializeGrid: requested={size}, current=({width}x{depth}), hasFloorView={floorView != null}, childCount={transform.childCount}, children=[{DumpChildNames()}]");
-
             Vector2Int normalizedSize = NormalizeBoardSize(size.x, size.z);
             width = normalizedSize.x;
             depth = normalizedSize.y;
@@ -117,8 +115,6 @@ namespace Ubongo
             SetupDefaultTargetArea();
             ClearHighlights();
             NotifyFillStateChanged();
-
-            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameBoard.InitializeGrid: done, new=({width}x{depth}), childCount={transform.childCount}, children=[{DumpChildNames()}]");
         }
 
         public FloorTileView GetCell(int x, int y, int z)
@@ -624,7 +620,6 @@ namespace Ubongo
 
         private void RebuildFloorView()
         {
-            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameBoard.RebuildFloorView: disposing old floorView={floorView != null}");
             if (floorView != null)
             {
                 floorView.Dispose();
@@ -640,7 +635,6 @@ namespace Ubongo
                 gridLineWidth,
                 gridLineYOffset);
             floorView.Rebuild(width, depth, cellSize, cellSpacing, BoardFootprintSize);
-            Debug.Log($"[RoundFlow][F{Time.frameCount}] GameBoard.RebuildFloorView: new floorView created");
         }
 
         private Vector3 GetLocalGridStartPosition(float totalCellSize)
@@ -734,20 +728,6 @@ namespace Ubongo
             }
 
             boardState = new BoardState(width, TargetArea.RequiredHeight, depth);
-        }
-
-        private string DumpChildNames()
-        {
-            if (transform.childCount == 0) return "(empty)";
-            var sb = new System.Text.StringBuilder();
-            for (int i = 0; i < transform.childCount; i++)
-            {
-                if (i > 0) sb.Append(", ");
-                var child = transform.GetChild(i);
-                sb.Append(child.name);
-                if (!child.gameObject.activeSelf) sb.Append("(inactive)");
-            }
-            return sb.ToString();
         }
 
         private void EnsureConstructedOrThrow()
