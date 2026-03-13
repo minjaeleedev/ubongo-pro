@@ -55,7 +55,6 @@ namespace Ubongo
             this.cellSpacing = cellSpacing;
             this.boardFootprintSize = boardFootprintSize;
 
-            Debug.Log($"[RoundFlow] BoardFloorView.Rebuild: size=({this.width}x{this.depth}), hasExistingContainer={boardContainer != null}");
             DestroyBoardContainer();
             CreateBoardContainer();
             CreateFloorTiles();
@@ -161,18 +160,15 @@ namespace Ubongo
             boardContainer = new GameObject("BoardContainer");
             boardContainer.transform.SetParent(ownerTransform, false);
             ApplyBoardLayer(boardContainer);
-            Debug.Log($"[RoundFlow] BoardFloorView.CreateBoardContainer: id={boardContainer.GetInstanceID()}, parent={ownerTransform.name}(childCount={ownerTransform.childCount})");
         }
 
         private void DestroyBoardContainer()
         {
             if (boardContainer == null)
             {
-                Debug.Log("[RoundFlow] BoardFloorView.DestroyBoardContainer: no container to destroy");
                 return;
             }
 
-            Debug.Log($"[RoundFlow] BoardFloorView.DestroyBoardContainer: id={boardContainer.GetInstanceID()}, active={boardContainer.activeSelf}, childCount={boardContainer.transform.childCount}");
             boardContainer.transform.SetParent(null, false);
             boardContainer.SetActive(false);
             UnityObjectUtility.SafeDestroy(boardContainer);
@@ -183,7 +179,6 @@ namespace Ubongo
         private void CreateFloorTiles()
         {
             floorTiles = new FloorTileView[width, depth];
-            Debug.Log($"[RoundFlow] BoardFloorView.CreateFloorTiles: creating {width}x{depth}={width * depth} tiles in container id={boardContainer.GetInstanceID()}");
             float totalCellSize = cellSize + cellSpacing;
             Vector3 startPos = new Vector3(
                 -(width - 1) * totalCellSize * 0.5f,
