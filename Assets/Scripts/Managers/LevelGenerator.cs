@@ -325,6 +325,7 @@ namespace Ubongo
                 return;
             }
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] LevelGenerator.SpawnFromLevelData: incoming pieces={levelData.Pieces.Count}, existing pieces={currentPieces.Count}");
             ClearCurrentPieces();
             currentLevelData = levelData;
             SpawnPieces(levelData.Pieces);
@@ -1817,6 +1818,8 @@ namespace Ubongo
 
                 currentPieces.Add(pieceObject);
             }
+
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] LevelGenerator.SpawnPieces: spawned {pieces.Count} pieces, currentPieces.Count={currentPieces.Count}");
         }
 
         /// <summary>
@@ -1906,8 +1909,11 @@ namespace Ubongo
         /// </summary>
         private void ClearCurrentPieces()
         {
-            foreach (GameObject piece in currentPieces)
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] LevelGenerator.ClearCurrentPieces: count={currentPieces.Count}");
+            for (int i = 0; i < currentPieces.Count; i++)
             {
+                GameObject piece = currentPieces[i];
+                Debug.Log($"[RoundFlow][F{Time.frameCount}] LevelGenerator.ClearCurrentPieces: destroying piece[{i}] name={piece?.name ?? "null"}, id={piece?.GetInstanceID() ?? 0}, isNull={piece == null}");
                 if (piece != null)
                 {
                     UnityObjectUtility.SafeDestroy(piece);

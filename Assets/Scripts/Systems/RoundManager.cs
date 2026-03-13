@@ -106,6 +106,7 @@ namespace Ubongo.Systems
         private DifficultyLevel _currentDifficulty;
         private List<RoundResult> _roundResults;
         private Coroutine _timerCoroutine;
+        private Coroutine _transitionCoroutine;
         private bool _isSecondChanceRound;
         private int _playersCompletedCount;
         private int _totalPlayersInRound;
@@ -192,6 +193,12 @@ namespace Ubongo.Systems
         /// </summary>
         public void StartNewGame(DifficultyLevel difficulty)
         {
+            if (_transitionCoroutine != null)
+            {
+                StopCoroutine(_transitionCoroutine);
+                _transitionCoroutine = null;
+            }
+
             _currentDifficulty = difficulty;
             _currentRound = 0;
             _roundResults = new List<RoundResult>();
@@ -214,6 +221,20 @@ namespace Ubongo.Systems
                 return;
             }
 
+            if (_transitionCoroutine != null)
+            {
+                StopCoroutine(_transitionCoroutine);
+                _transitionCoroutine = null;
+            }
+
+            if (_currentState == RoundState.Starting || _currentState == RoundState.InProgress
+                || _currentState == RoundState.SecondChanceInProgress)
+            {
+                Debug.LogWarning($"[RoundFlow][F{Time.frameCount}] RoundManager.StartNextRound: blocked, already in state={_currentState}");
+                return;
+            }
+
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.StartNextRound: round={_currentRound + 1}, prevState={_currentState}");
             _currentRound++;
             StartCoroutine(StartRoundSequence());
         }
@@ -223,6 +244,7 @@ namespace Ubongo.Systems
             _currentState = RoundState.Starting;
             _isSecondChanceRound = false;
             _playersCompletedCount = 0;
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.StartRoundSequence: round={_currentRound}, state=Starting");
 
             var config = CreateRoundConfig();
             _currentTimeLimit = config.TimeLimit;
@@ -234,6 +256,7 @@ namespace Ubongo.Systems
             _currentState = RoundState.InProgress;
             _roundStartTime = Time.time;
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.StartRoundSequence: round={_currentRound}, state=InProgress, firing OnRoundStarted");
             OnRoundStarted?.Invoke(_currentRound);
 
             if (_currentState != RoundState.InProgress)
@@ -323,9 +346,10 @@ namespace Ubongo.Systems
             );
 
             _roundResults.Add(result);
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.CompleteRound: round={_currentRound}, timeSpent={timeSpent:F2}s, transitioning in {(_nextTransitionDelayOverride ?? transitionDelay)}s");
             OnRoundCompleted?.Invoke(result);
 
-            StartCoroutine(TransitionToNextRound());
+            _transitionCoroutine = StartCoroutine(TransitionToNextRound());
         }
 
         /// <summary>
@@ -387,7 +411,7 @@ namespace Ubongo.Systems
             _roundResults.Add(result);
             OnRoundFailed?.Invoke(result);
 
-            StartCoroutine(TransitionToNextRound());
+            _transitionCoroutine = StartCoroutine(TransitionToNextRound());
         }
 
         /// <summary>
@@ -471,7 +495,7 @@ namespace Ubongo.Systems
             _roundResults.Add(result);
             OnSecondChanceCompleted?.Invoke(result);
 
-            StartCoroutine(TransitionToNextRound());
+            _transitionCoroutine = StartCoroutine(TransitionToNextRound());
         }
 
         /// <summary>
@@ -495,7 +519,7 @@ namespace Ubongo.Systems
             _roundResults.Add(result);
             OnRoundFailed?.Invoke(result);
 
-            StartCoroutine(TransitionToNextRound());
+            _transitionCoroutine = StartCoroutine(TransitionToNextRound());
         }
 
         /// <summary>
@@ -521,10 +545,16 @@ namespace Ubongo.Systems
             float delay = _nextTransitionDelayOverride ?? transitionDelay;
             _nextTransitionDelayOverride = null;
 
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.TransitionToNextRound: round={_currentRound}, delay={delay:F1}s");
+
             if (delay > 0f)
             {
                 yield return new WaitForSeconds(delay);
             }
+
+            Debug.Log($"[RoundFlow][F{Time.frameCount}] RoundManager.TransitionToNextRound: delay elapsed, about to start next round");
+
+            _transitionCoroutine = null;
 
             if (_currentRound >= totalRounds)
             {
@@ -547,6 +577,12 @@ namespace Ubongo.Systems
         /// </summary>
         public void RestartCurrentRound()
         {
+            if (_transitionCoroutine != null)
+            {
+                StopCoroutine(_transitionCoroutine);
+                _transitionCoroutine = null;
+            }
+
             if (_timerCoroutine != null)
             {
                 StopCoroutine(_timerCoroutine);
@@ -626,6 +662,10 @@ namespace Ubongo.Systems
             if (_timerCoroutine != null)
             {
                 StopCoroutine(_timerCoroutine);
+            }
+            if (_transitionCoroutine != null)
+            {
+                StopCoroutine(_transitionCoroutine);
             }
 
             if (_instance == this)
