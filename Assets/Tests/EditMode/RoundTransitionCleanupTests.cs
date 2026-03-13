@@ -105,6 +105,56 @@ namespace Ubongo.Tests.EditMode
             Assert.IsTrue(cell.VisualRenderer.enabled);
         }
 
+        [Test]
+        public void InitializeGrid_DefaultTilePath_CellsAreChildrenOfBoardContainer()
+        {
+            GameBoard board = CreateBoard();
+            board.InitializeGrid(new Vector3Int(3, TargetArea.RequiredHeight, 3));
+
+            Transform container = board.transform.Find("BoardContainer");
+            Assert.IsNotNull(container);
+
+            int cellCount = 0;
+            foreach (Transform child in container)
+            {
+                if (child.name.StartsWith("Cell_"))
+                {
+                    cellCount++;
+                }
+            }
+
+            Assert.AreEqual(9, cellCount,
+                "All 9 cells should be children of BoardContainer, not scene root");
+        }
+
+        [Test]
+        public void InitializeGrid_CalledTwice_NoCellsRemainAtSceneRoot()
+        {
+            GameBoard board = CreateBoard();
+            board.InitializeGrid(new Vector3Int(3, TargetArea.RequiredHeight, 3));
+            board.InitializeGrid(new Vector3Int(2, TargetArea.RequiredHeight, 2));
+
+            GameObject[] allObjects = Object.FindObjectsByType<GameObject>(
+                FindObjectsInactive.Include, FindObjectsSortMode.None);
+            var orphanCells = new List<GameObject>();
+            foreach (GameObject obj in allObjects)
+            {
+                if (obj.name.StartsWith("Cell_") && obj.transform.parent == null)
+                {
+                    orphanCells.Add(obj);
+                }
+            }
+
+            Assert.AreEqual(0, orphanCells.Count,
+                $"Found {orphanCells.Count} orphan Cell(s) at scene root: " +
+                string.Join(", ", orphanCells.ConvertAll(o => o.name)));
+
+            foreach (GameObject orphan in orphanCells)
+            {
+                Object.DestroyImmediate(orphan);
+            }
+        }
+
         private GameBoard CreateBoard()
         {
             GameObject boardObject = new GameObject("GameBoard_Test");
