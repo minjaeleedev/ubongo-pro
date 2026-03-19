@@ -6,9 +6,9 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using Ubongo.Core;
 
-namespace Ubongo.Tests.PlayMode
+namespace Ubongo.Tests.PlayMode.Presentation.Board
 {
-    public class BoardHighlightPlayModeTests
+    public class GameBoardHighlightTests
     {
         private static readonly int BaseColorPropertyId = Shader.PropertyToID("_BaseColor");
         private static readonly int ColorPropertyId = Shader.PropertyToID("_Color");
