@@ -1,7 +1,7 @@
 using NUnit.Framework;
 using Ubongo.Application.Formatting;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Application.Formatting
 {
     public class DifficultyDisplayFormatterTests
     {

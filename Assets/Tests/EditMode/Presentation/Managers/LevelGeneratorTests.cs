@@ -6,9 +6,9 @@ using Ubongo.Domain.Board;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.Managers
 {
-    public class LevelGeneratorContractTests
+    public class LevelGeneratorTests
     {
         [SetUp]
         public void SetUp()

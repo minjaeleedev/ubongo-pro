@@ -3,9 +3,9 @@ using UnityEngine;
 using Ubongo.Domain;
 using Ubongo.Systems;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.Systems
 {
-    public class DifficultySystemContractTests
+    public class DifficultySystemTests
     {
         [SetUp]
         public void SetUp()

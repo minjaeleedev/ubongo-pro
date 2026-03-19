@@ -3,7 +3,7 @@ using UnityEngine;
 using Ubongo.Domain;
 using Ubongo.Systems;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Core
 {
     public class GemDefinitionCatalogTests
     {
