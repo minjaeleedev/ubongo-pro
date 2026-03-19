@@ -4,9 +4,9 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using Ubongo;
 
-namespace Ubongo.Tests.PlayMode
+namespace Ubongo.Tests.PlayMode.Presentation.Input
 {
-    public class InputManagerDebugActionsPlayModeTests
+    public class InputManagerTests
     {
         [UnitySetUp]
         public IEnumerator UnitySetUp()
