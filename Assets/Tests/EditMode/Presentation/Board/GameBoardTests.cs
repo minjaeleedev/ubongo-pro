@@ -4,9 +4,9 @@ using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Core;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.Board
 {
-    public class GameBoardStateSyncTests
+    public class GameBoardTests
     {
         private readonly List<GameObject> spawnedObjects = new List<GameObject>();
 
@@ -21,6 +21,31 @@ namespace Ubongo.Tests.EditMode
                 }
             }
             spawnedObjects.Clear();
+        }
+
+        [Test]
+        public void GetFootprintCells_RemovesHeightAndDuplicates()
+        {
+            List<Vector3Int> blocks = new List<Vector3Int>
+            {
+                new Vector3Int(0, 0, 0),
+                new Vector3Int(0, 1, 0),
+                new Vector3Int(1, 0, 0),
+                new Vector3Int(1, 1, 0),
+                new Vector3Int(0, 0, 1)
+            };
+
+            HashSet<Vector2Int> footprint = GameBoard.GetFootprintCells(blocks, new Vector3Int(2, 0, 3));
+
+            CollectionAssert.AreEquivalent(
+                new[]
+                {
+                    new Vector2Int(2, 3),
+                    new Vector2Int(3, 3),
+                    new Vector2Int(2, 4)
+                },
+                footprint
+            );
         }
 
         [Test]
