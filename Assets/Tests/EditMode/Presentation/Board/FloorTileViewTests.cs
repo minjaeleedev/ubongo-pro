@@ -1,9 +1,9 @@
 using NUnit.Framework;
 using UnityEngine;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.Board
 {
-    public class FloorTileVisibilityTests
+    public class FloorTileViewTests
     {
         private GameObject tileRoot;
         private FloorTileView tile;
@@ -129,6 +129,36 @@ namespace Ubongo.Tests.EditMode
 
             Assert.That(gridOverlay.transform.localPosition.y, Is.EqualTo(baseY).Within(0.001f),
                 "Grid overlay should not be raised when occupied but not target");
+        }
+
+        [Test]
+        public void FloorTileView_UsesVisualChildRenderer_WhenAvailable()
+        {
+            GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            GameObject visualChild = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            visualChild.name = "Visual";
+            visualChild.transform.SetParent(cellRoot.transform, false);
+
+            FloorTileView cell = cellRoot.AddComponent<FloorTileView>();
+            cell.Initialize(0, 0);
+
+            Assert.AreEqual(visualChild.GetComponent<Renderer>(), cell.VisualRenderer);
+
+            Object.DestroyImmediate(cellRoot);
+        }
+
+        [Test]
+        public void FloorTileView_FallsBackToRootRenderer_WhenVisualChildMissing()
+        {
+            GameObject cellRoot = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            Renderer rootRenderer = cellRoot.GetComponent<Renderer>();
+
+            FloorTileView cell = cellRoot.AddComponent<FloorTileView>();
+            cell.Initialize(0, 0);
+
+            Assert.AreEqual(rootRenderer, cell.VisualRenderer);
+
+            Object.DestroyImmediate(cellRoot);
         }
     }
 }

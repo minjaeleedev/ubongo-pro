@@ -2,15 +2,16 @@ using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Domain;
 using Ubongo.Systems;
+using Ubongo.Tests.EditMode.Shared;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.UI
 {
-    public class UIManagerStateFlowTests
+    public class UIManagerTests
     {
         [SetUp]
         public void SetUp()
         {
-            CleanupRuntimeSingletonObjects();
+            SceneTestHelper.CleanupRuntimeSingletonObjects();
             PlayerPrefs.DeleteKey("TotalGems");
         }
 
@@ -18,7 +19,7 @@ namespace Ubongo.Tests.EditMode
         public void TearDown()
         {
             PlayerPrefs.DeleteKey("TotalGems");
-            CleanupRuntimeSingletonObjects();
+            SceneTestHelper.CleanupRuntimeSingletonObjects();
         }
 
         [Test]
@@ -92,33 +93,6 @@ namespace Ubongo.Tests.EditMode
             Assert.AreEqual(3, uiManager.TotalGems);
 
             UnityEngine.Object.DestroyImmediate(uiObject);
-        }
-
-        private static void CleanupRuntimeSingletonObjects()
-        {
-            DestroyAllComponents<GameManager>();
-            DestroyAllComponents<GameBoard>();
-            DestroyAllComponents<InputManager>();
-            DestroyAllComponents<LevelGenerator>();
-            DestroyAllComponents<RoundManager>();
-            DestroyAllComponents<GemSystem>();
-            DestroyAllComponents<DifficultySystem>();
-            DestroyAllComponents<TiebreakerManager>();
-            DestroyAllComponents<UIManager>();
-        }
-
-        private static void DestroyAllComponents<T>() where T : Component
-        {
-            T[] components = UnityEngine.Object.FindObjectsByType<T>(FindObjectsInactive.Include, FindObjectsSortMode.None);
-            foreach (T component in components)
-            {
-                if (component == null)
-                {
-                    continue;
-                }
-
-                UnityEngine.Object.DestroyImmediate(component.gameObject);
-            }
         }
     }
 }
