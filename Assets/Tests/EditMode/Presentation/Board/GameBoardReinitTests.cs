@@ -3,9 +3,9 @@ using NUnit.Framework;
 using UnityEngine;
 using Ubongo.Core;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Presentation.Board
 {
-    public class RoundTransitionCleanupTests
+    public class GameBoardReinitTests
     {
         private readonly List<GameObject> spawnedObjects = new List<GameObject>();
 

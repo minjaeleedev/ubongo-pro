@@ -4,7 +4,7 @@ using UnityEngine;
 using Ubongo.Core;
 using Ubongo.Domain.Board;
 
-namespace Ubongo.Tests.EditMode
+namespace Ubongo.Tests.EditMode.Domain.Board
 {
     public class BoardPlacementServiceTests
     {
